@@ -1,0 +1,59 @@
+{
+  "updated_at": "2026-05-12T00:00:00Z",
+  "categories": [
+    {
+      "name": "Node.js",
+      "icon": "nodejs",
+      "releases": [
+        {
+          "version": "22.15.0",
+          "date": "2026-05-10",
+          "summary": "New permission model API and improved ESM loader performance",
+          "details": "## Highlights\n\n- **Permission Model API**: New `process.permission.has()` method for runtime permission checks\n- **ESM Loader**: 35% faster module resolution for deep dependency trees\n- **V8 13.1**: Updated V8 engine with improved JIT compilation\n- **test_runner**: Added `--test-shard` flag for parallel test execution across workers\n\n## Breaking Changes\n\n- `fs.read()` now throws on negative offset values instead of silently clamping to 0\n- Deprecated `url.parse()` now emits a runtime warning"
+        },
+        {
+          "version": "22.14.0",
+          "date": "2026-04-28",
+          "summary": "SQLite improvements and new diagnostics channel hooks",
+          "details": "## Highlights\n\n- **node:sqlite**: Added WAL mode support and prepared statement caching\n- **Diagnostics Channel**: New `http.client.request.created` and `http.server.response.created` hooks\n- **Sea**: Single executable applications now support embedding multiple assets\n\n## Bug Fixes\n\n- Fixed memory leak in `AbortController` when used with `fetch()`\n- Corrected `crypto.subtle.deriveBits` length validation for ECDH"
+        }
+      ]
+    },
+    {
+      "name": "React",
+      "icon": "react",
+      "releases": [
+        {
+          "version": "19.1.0",
+          "date": "2026-05-08",
+          "summary": "React Compiler stable release and Activity API",
+          "details": "## Highlights\n\n- **React Compiler**: Now stable and included by default — automatic memoization for all components\n- **Activity API**: New `<Activity>` component for offscreen rendering with state preservation\n- **useFormStatus**: Enhanced with `pending`, `data`, `method`, and `action` properties\n- **Server Components**: Improved streaming with selective hydration priorities\n\n## Migration Notes\n\nThe React Compiler replaces manual `useMemo`, `useCallback`, and `React.memo` usage. These APIs still work but are no longer necessary for performance optimization."
+        },
+        {
+          "version": "19.0.1",
+          "date": "2026-04-15",
+          "summary": "Patch release with hydration mismatch fixes",
+          "details": "## Bug Fixes\n\n- Fixed hydration mismatch warnings for `<style>` tags in Server Components\n- Corrected `useActionState` error boundary propagation\n- Fixed memory leak in `use()` hook when used with abandoned promises\n- Improved error messages for invalid hook call order in development"
+        }
+      ]
+    },
+    {
+      "name": "Go",
+      "icon": "go",
+      "releases": [
+        {
+          "version": "1.24.3",
+          "date": "2026-05-06",
+          "summary": "Generic type inference improvements and new iter package",
+          "details": "## Highlights\n\n- **Generic Type Inference**: Compiler now infers type parameters from return types in more cases\n- **iter package**: New standard library package with `Seq`, `Seq2`, `Pull`, and `Pull2` iterator constructors\n- **go vet**: New `appends` analyzer warns about `append` calls that don't use their return value\n- **Runtime**: Reduced GC pause times by 15% for heaps over 4GB\n\n## Standard Library\n\n- `maps.All` and `slices.All` now return `iter.Seq2` for use with range-over-func\n- `os.Root` type for restricted filesystem access"
+        },
+        {
+          "version": "1.24.2",
+          "date": "2026-04-20",
+          "summary": "Security patch for crypto/tls and net/http",
+          "details": "## Security Fixes\n\n- **CVE-2026-1234**: Fixed TLS session ticket rotation vulnerability in `crypto/tls`\n- **CVE-2026-1235**: Fixed request smuggling via malformed `Transfer-Encoding` headers in `net/http`\n\n## Bug Fixes\n\n- Fixed compiler crash when using generic type aliases with embedded interfaces\n- Corrected race condition in `sync.Pool` cleanup during GC"
+        }
+      ]
+    }
+  ]
+}
