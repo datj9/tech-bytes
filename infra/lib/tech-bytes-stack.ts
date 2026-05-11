@@ -71,6 +71,23 @@ export class TechBytesStack extends cdk.Stack {
 
     siteBucket.grantRead(originAccessIdentity);
 
+    // CloudFront Function to rewrite /path → /path/index.html
+    const urlRewrite = new cloudfront.Function(this, 'UrlRewrite', {
+      code: cloudfront.FunctionCode.fromInline(`
+function handler(event) {
+  var request = event.request;
+  var uri = request.uri;
+  if (uri.endsWith('/')) {
+    request.uri += 'index.html';
+  } else if (!uri.includes('.')) {
+    request.uri += '/index.html';
+  }
+  return request;
+}
+      `),
+      runtime: cloudfront.FunctionRuntime.JS_2_0,
+    });
+
     const distribution = new cloudfront.Distribution(this, 'Distribution', {
       defaultBehavior: {
         origin: new origins.S3Origin(siteBucket, {
@@ -78,19 +95,17 @@ export class TechBytesStack extends cdk.Stack {
         }),
         viewerProtocolPolicy:
           cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+        functionAssociations: [
+          {
+            function: urlRewrite,
+            eventType: cloudfront.FunctionEventType.VIEWER_REQUEST,
+          },
+        ],
       },
       defaultRootObject: 'index.html',
       domainNames: [DOMAIN_NAME],
       certificate,
       priceClass: cloudfront.PriceClass.PRICE_CLASS_100,
-      errorResponses: [
-        {
-          httpStatus: 404,
-          responsePagePath: '/404.html',
-          responseHttpStatus: 404,
-          ttl: cdk.Duration.minutes(5),
-        },
-      ],
     });
 
     // ---------------------------------------------------------------

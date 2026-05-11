@@ -1,0 +1,97 @@
+{
+  "updated_at": "2026-05-12T00:00:00Z",
+  "weekly": [
+    {
+      "name": "anthropics/claude-code",
+      "url": "https://github.com/anthropics/claude-code",
+      "description": "An agentic coding tool that lives in your terminal",
+      "language": "TypeScript",
+      "stars": 28400,
+      "stars_this_period": 4200,
+      "summary": "Anthropic's official CLI for Claude, providing an AI coding assistant that operates directly in the terminal. It can read, write, and refactor code across entire repositories, run tests, and interact with git. Trending due to rapid feature additions including multi-agent orchestration and MCP server support."
+    },
+    {
+      "name": "pydantic/logfire",
+      "url": "https://github.com/pydantic/logfire",
+      "description": "Uncomplicated observability for Python",
+      "language": "Python",
+      "stars": 5800,
+      "stars_this_period": 1900,
+      "summary": "An observability platform from the Pydantic team that provides structured logging, tracing, and metrics with minimal setup. Integrates natively with FastAPI, Django, and asyncio. Trending because of its recent 1.0 release and seamless Pydantic model validation tracking."
+    },
+    {
+      "name": "vercel/next.js",
+      "url": "https://github.com/vercel/next.js",
+      "description": "The React Framework",
+      "language": "TypeScript",
+      "stars": 132000,
+      "stars_this_period": 1600,
+      "summary": "The dominant React meta-framework saw renewed interest after shipping Turbopack as the default bundler in v15.3, delivering 5x faster dev server startup. Partial prerendering is now stable, and the new Middleware v2 API simplifies edge computing patterns."
+    },
+    {
+      "name": "DiceDB/dice",
+      "url": "https://github.com/DiceDB/dice",
+      "description": "A drop-in replacement for Redis with SQL-based reactivity",
+      "language": "Go",
+      "stars": 8900,
+      "stars_this_period": 2100,
+      "summary": "A Redis-compatible in-memory database written in Go that adds SQL-like query support and real-time reactivity (push-based subscriptions when data changes). Trending after benchmarks showed comparable performance to Redis 7 with the added query expressiveness."
+    },
+    {
+      "name": "astral-sh/uv",
+      "url": "https://github.com/astral-sh/uv",
+      "description": "An extremely fast Python package installer and resolver, written in Rust",
+      "language": "Rust",
+      "stars": 52000,
+      "stars_this_period": 3100,
+      "summary": "Astral's Rust-based Python package manager that replaces pip, virtualenv, and pip-tools with a single blazing-fast binary. Trending after v0.6 added lockfile support, workspace management, and Python version management, making it a complete replacement for the entire Python toolchain."
+    }
+  ],
+  "monthly": [
+    {
+      "name": "microsoft/TypeChat",
+      "url": "https://github.com/microsoft/TypeChat",
+      "description": "TypeChat makes it easy to build natural language interfaces using types",
+      "language": "TypeScript",
+      "stars": 9200,
+      "stars_this_period": 2800,
+      "summary": "Microsoft's library for building type-safe natural language interfaces by leveraging TypeScript's type system as a schema language for LLM outputs. Converts user intent into validated, structured data. Gained traction after adding support for streaming responses and multi-turn conversations."
+    },
+    {
+      "name": "oven-sh/bun",
+      "url": "https://github.com/oven-sh/bun",
+      "description": "Incredibly fast JavaScript runtime, bundler, test runner, and package manager",
+      "language": "Zig",
+      "stars": 78000,
+      "stars_this_period": 4500,
+      "summary": "Bun continues trending after the 1.2 release which brought full Node.js compatibility for 99% of npm packages, Windows ARM64 support, and a built-in S3 client. Performance improvements to the bundler make it competitive with esbuild and Turbopack."
+    },
+    {
+      "name": "juspay/hyperswitch",
+      "url": "https://github.com/juspay/hyperswitch",
+      "description": "An open source payments switch written in Rust",
+      "language": "Rust",
+      "stars": 16500,
+      "stars_this_period": 3200,
+      "summary": "A payment orchestration layer that provides a unified API over 50+ payment processors (Stripe, Adyen, etc.). Written in Rust for performance and reliability. Trending after adding support for subscription management and a no-code payment flow builder."
+    },
+    {
+      "name": "incident-io/catalog",
+      "url": "https://github.com/incident-io/catalog",
+      "description": "Manage your services, teams, and infrastructure in one place",
+      "language": "Go",
+      "stars": 4300,
+      "stars_this_period": 1800,
+      "summary": "An open-source service catalog that syncs with PagerDuty, Datadog, GitHub, and Terraform to provide a single source of truth for infrastructure ownership. Recently added Backstage import support and RBAC, attracting platform engineering teams looking for lighter alternatives."
+    },
+    {
+      "name": "biomejs/biome",
+      "url": "https://github.com/biomejs/biome",
+      "description": "A toolchain for web projects, aimed to provide functionalities to maintain them",
+      "language": "Rust",
+      "stars": 18200,
+      "stars_this_period": 2600,
+      "summary": "Rust-based web toolchain providing formatting and linting for JavaScript, TypeScript, JSON, CSS, and GraphQL. Positioned as a faster alternative to ESLint + Prettier. Trending after the 2.0 release added CSS linting, plugin support, and a migration CLI that converts ESLint configs automatically."
+    }
+  ]
+}

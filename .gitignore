@@ -12,5 +12,5 @@ cdk.out/
 cdk.context.json
 *.js.map
 *.d.ts
-data/*.json
+# data/*.json — tracked for initial/fallback content
 .DS_Store
