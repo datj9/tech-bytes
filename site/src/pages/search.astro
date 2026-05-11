@@ -1,0 +1,34 @@
+---
+import Base from '../layouts/Base.astro';
+---
+
+<Base title="Search">
+  <div class="mb-8">
+    <h1 class="text-3xl font-bold text-slate-100 mb-2">Search</h1>
+    <p class="text-slate-400 text-lg">Find releases, stories, and trending repos</p>
+  </div>
+
+  <div id="search"></div>
+
+  <link href="/pagefind/pagefind-ui.css" rel="stylesheet" />
+  <script is:inline src="/pagefind/pagefind-ui.js"></script>
+  <script is:inline>
+    window.addEventListener('DOMContentLoaded', () => {
+      new PagefindUI({ element: '#search', showSubResults: true });
+    });
+  </script>
+
+  <style is:global>
+    :root {
+      --pagefind-ui-scale: 1;
+      --pagefind-ui-primary: #34d399;
+      --pagefind-ui-text: #f1f5f9;
+      --pagefind-ui-background: #0f172a;
+      --pagefind-ui-border: #334155;
+      --pagefind-ui-tag: #1e293b;
+      --pagefind-ui-border-width: 1px;
+      --pagefind-ui-border-radius: 8px;
+      --pagefind-ui-font: inherit;
+    }
+  </style>
+</Base>

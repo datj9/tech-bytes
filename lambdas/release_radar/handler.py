@@ -4,9 +4,11 @@ import json
 import logging
 import sys
 import time
+from pathlib import Path
 from typing import Any
 
 import requests
+import yaml
 
 from shared.utils import get_github_headers, summarize, today_str, upload_to_s3
 
@@ -15,16 +17,31 @@ logging.basicConfig(level=logging.INFO)
 
 S3_KEY = "release-radar.json"
 
-TECHNOLOGIES: list[dict[str, str]] = [
-    {"name": "Node.js", "repo": "nodejs/node"},
-    {"name": "TypeScript", "repo": "microsoft/TypeScript"},
-    {"name": "Python", "repo": "python/cpython"},
-    {"name": "React", "repo": "facebook/react"},
-    {"name": "Go", "repo": "golang/go"},
-    {"name": "Rust", "repo": "rust-lang/rust"},
-    {"name": "Next.js", "repo": "vercel/next.js"},
-    {"name": "Astro", "repo": "withastro/astro"},
-]
+_CONFIG_FILENAME = "config/technologies.yml"
+
+
+def _load_technologies() -> list[dict[str, str]]:
+    """Load the technology list from config/technologies.yml.
+
+    Search order:
+    1. Project root (Lambda deploy package includes config/ at the root)
+    2. Two levels up from this file (local dev: lambdas/release_radar/../../config/)
+    """
+    candidates = [
+        Path(_CONFIG_FILENAME),
+        Path(__file__).resolve().parent.parent.parent / _CONFIG_FILENAME,
+    ]
+    for path in candidates:
+        resolved = path.resolve()
+        if resolved.is_file():
+            logger.info("Loading technologies from %s", resolved)
+            with open(resolved, encoding="utf-8") as fh:
+                data = yaml.safe_load(fh)
+            return data.get("technologies", [])
+
+    logger.warning("No technologies config found, searched: %s", [str(p) for p in candidates])
+    return []
+
 
 SUMMARY_PROMPT = (
     "You are a technical writer. Summarize this software release into a short, "
@@ -85,7 +102,8 @@ def _process_technology(tech: dict[str, str]) -> dict[str, Any] | None:
     """Fetch and summarize releases for one technology."""
     name = tech["name"]
     repo = tech["repo"]
-    logger.info("Processing %s (%s)", name, repo)
+    category = tech.get("category", "Uncategorized")
+    logger.info("Processing %s (%s) [%s]", name, repo, category)
 
     releases = _fetch_releases(repo)
     if not releases:
@@ -108,6 +126,7 @@ def _process_technology(tech: dict[str, str]) -> dict[str, Any] | None:
     return {
         "technology": name,
         "repo": repo,
+        "category": category,
         "releases": processed,
     }
 
@@ -116,8 +135,13 @@ def handler(event: Any = None, context: Any = None) -> dict[str, Any]:
     """Lambda handler — fetch all technology releases, summarize, upload to S3."""
     logger.info("Release Radar starting")
 
+    technologies = _load_technologies()
+    if not technologies:
+        logger.error("No technologies to process — check config/technologies.yml")
+        return {"generated_at": today_str(), "source": "github_releases", "technologies": [], "categories": {}}
+
     results: list[dict[str, Any]] = []
-    for tech in TECHNOLOGIES:
+    for tech in technologies:
         try:
             entry = _process_technology(tech)
             if entry:
@@ -127,10 +151,17 @@ def handler(event: Any = None, context: Any = None) -> dict[str, Any]:
             logger.exception("Failed to process technology %s", tech["name"])
             continue
 
+    # Build category grouping for the frontend
+    categories: dict[str, list[dict[str, Any]]] = {}
+    for entry in results:
+        cat = entry.get("category", "Uncategorized")
+        categories.setdefault(cat, []).append(entry)
+
     output = {
         "generated_at": today_str(),
         "source": "github_releases",
         "technologies": results,
+        "categories": categories,
     }
 
     try:

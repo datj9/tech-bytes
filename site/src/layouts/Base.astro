@@ -12,6 +12,8 @@ const navLinks = [
   { href: '/', label: 'Release Radar', icon: '📦' },
   { href: '/hn-digest', label: 'HN Digest', icon: '📰' },
   { href: '/trending', label: 'Trending', icon: '🔥' },
+  { href: '/search', label: 'Search', icon: '🔍' },
+  { href: '/contribute', label: 'Contribute', icon: '💡' },
 ];
 ---
 
@@ -23,6 +25,9 @@ const navLinks = [
     <meta name="viewport" content="width=device-width" />
     <meta name="generator" content={Astro.generator} />
     <title>{title} | Tech Bytes</title>
+    <link rel="alternate" type="application/rss+xml" title="Tech Bytes — Release Radar" href="/rss/releases.xml" />
+    <link rel="alternate" type="application/rss+xml" title="Tech Bytes — HN Daily Digest" href="/rss/hn.xml" />
+    <link rel="alternate" type="application/rss+xml" title="Tech Bytes — GitHub Trending" href="/rss/trending.xml" />
   </head>
   <body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col font-sans antialiased">
     <header class="border-b border-slate-800 sticky top-0 bg-slate-900/95 backdrop-blur-sm z-50">
@@ -46,6 +51,16 @@ const navLinks = [
               {link.label}
             </a>
           ))}
+          <a
+            href="/rss/releases.xml"
+            class="px-2 py-2 rounded-lg text-slate-400 hover:text-orange-400 hover:bg-slate-800/50 transition-colors ms-1"
+            title="RSS Feeds"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" class="inline-block">
+              <circle cx="6.18" cy="17.82" r="2.18" />
+              <path d="M4 4.44v2.83c7.03 0 12.73 5.7 12.73 12.73h2.83c0-8.59-6.97-15.56-15.56-15.56zm0 5.66v2.83c3.9 0 7.07 3.17 7.07 7.07h2.83c0-5.47-4.43-9.9-9.9-9.9z" />
+            </svg>
+          </a>
         </nav>
       </div>
     </header>

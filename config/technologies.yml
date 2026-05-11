@@ -1,0 +1,83 @@
+# Technologies tracked by Release Radar
+# Add new entries and they'll appear on the next Lambda run
+
+technologies:
+  # Runtimes
+  - name: Node.js
+    repo: nodejs/node
+    category: Runtimes
+  - name: Deno
+    repo: denoland/deno
+    category: Runtimes
+  - name: Bun
+    repo: oven-sh/bun
+    category: Runtimes
+  - name: Python
+    repo: python/cpython
+    category: Runtimes
+  - name: Go
+    repo: golang/go
+    category: Runtimes
+  - name: Rust
+    repo: rust-lang/rust
+    category: Runtimes
+
+  # Frontend Frameworks
+  - name: React
+    repo: facebook/react
+    category: Frontend
+  - name: Vue
+    repo: vuejs/core
+    category: Frontend
+  - name: Angular
+    repo: angular/angular
+    category: Frontend
+  - name: Svelte
+    repo: sveltejs/svelte
+    category: Frontend
+  - name: Astro
+    repo: withastro/astro
+    category: Frontend
+
+  # Meta-Frameworks
+  - name: Next.js
+    repo: vercel/next.js
+    category: Meta-Frameworks
+  - name: Nuxt
+    repo: nuxt/nuxt
+    category: Meta-Frameworks
+  - name: SvelteKit
+    repo: sveltejs/kit
+    category: Meta-Frameworks
+
+  # Languages & Compilers
+  - name: TypeScript
+    repo: microsoft/TypeScript
+    category: Languages
+
+  # CSS & Styling
+  - name: Tailwind CSS
+    repo: tailwindlabs/tailwindcss
+    category: CSS
+
+  # Build Tools
+  - name: Vite
+    repo: vitejs/vite
+    category: Build Tools
+  - name: esbuild
+    repo: evanw/esbuild
+    category: Build Tools
+  - name: Turbopack
+    repo: vercel/turborepo
+    category: Build Tools
+
+  # Infrastructure
+  - name: Docker
+    repo: moby/moby
+    category: Infrastructure
+  - name: Kubernetes
+    repo: kubernetes/kubernetes
+    category: Infrastructure
+  - name: Terraform
+    repo: hashicorp/terraform
+    category: Infrastructure

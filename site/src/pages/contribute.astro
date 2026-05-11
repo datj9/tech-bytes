@@ -1,0 +1,95 @@
+---
+import Base from '../layouts/Base.astro';
+
+const githubRepo = 'https://github.com/datj9/tech-bytes';
+const suggestUrl = `${githubRepo}/issues/new?template=suggest-technology.yml`;
+const bugUrl = `${githubRepo}/issues/new?template=bug-report.yml`;
+---
+
+<Base title="Contribute">
+  <div class="space-y-12">
+    <section class="text-center">
+      <h1 class="text-4xl font-bold text-emerald-400 mb-4">Contribute</h1>
+      <p class="text-slate-400 text-lg max-w-2xl mx-auto">
+        Tech Bytes tracks releases, trends, and news across the tech ecosystem.
+        Help us cover more ground by suggesting technologies or reporting issues.
+      </p>
+    </section>
+
+    <div class="grid gap-6 sm:grid-cols-2">
+      <a
+        href={suggestUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        class="group block rounded-xl border border-slate-700 bg-slate-800/50 p-6 transition-all hover:border-emerald-500/50 hover:bg-slate-800"
+      >
+        <div class="text-3xl mb-3">💡</div>
+        <h2 class="text-xl font-semibold text-slate-100 group-hover:text-emerald-400 transition-colors mb-2">
+          Suggest a Technology
+        </h2>
+        <p class="text-slate-400 text-sm leading-relaxed">
+          Know a framework, runtime, language, or tool that deserves tracking?
+          Open a suggestion issue and we'll review it for inclusion.
+        </p>
+        <span class="inline-flex items-center gap-1 mt-4 text-sm font-medium text-emerald-400 group-hover:text-emerald-300">
+          Open suggestion form
+          <svg class="w-4 h-4 transition-transform group-hover:translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+          </svg>
+        </span>
+      </a>
+
+      <a
+        href={bugUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        class="group block rounded-xl border border-slate-700 bg-slate-800/50 p-6 transition-all hover:border-emerald-500/50 hover:bg-slate-800"
+      >
+        <div class="text-3xl mb-3">🐛</div>
+        <h2 class="text-xl font-semibold text-slate-100 group-hover:text-emerald-400 transition-colors mb-2">
+          Report a Bug
+        </h2>
+        <p class="text-slate-400 text-sm leading-relaxed">
+          Found a broken page, wrong data, or rendering issue?
+          Let us know so we can fix it.
+        </p>
+        <span class="inline-flex items-center gap-1 mt-4 text-sm font-medium text-emerald-400 group-hover:text-emerald-300">
+          Open bug report
+          <svg class="w-4 h-4 transition-transform group-hover:translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+          </svg>
+        </span>
+      </a>
+    </div>
+
+    <section class="rounded-xl border border-slate-700 bg-slate-800/50 p-6 sm:p-8">
+      <h2 class="text-xl font-semibold text-slate-100 mb-4">How It Works</h2>
+      <ol class="space-y-4 text-slate-400">
+        <li class="flex gap-3">
+          <span class="flex-shrink-0 w-7 h-7 rounded-full bg-emerald-500/20 text-emerald-400 font-bold text-sm flex items-center justify-center">1</span>
+          <span><strong class="text-slate-200">Suggest</strong> — Open a GitHub issue using the suggestion form above. Include the repository URL and a category.</span>
+        </li>
+        <li class="flex gap-3">
+          <span class="flex-shrink-0 w-7 h-7 rounded-full bg-emerald-500/20 text-emerald-400 font-bold text-sm flex items-center justify-center">2</span>
+          <span><strong class="text-slate-200">Review</strong> — We review suggestions and, if approved, add the technology to <code class="text-emerald-400 bg-slate-900 px-1.5 py-0.5 rounded text-xs">config/technologies.yml</code>.</span>
+        </li>
+        <li class="flex gap-3">
+          <span class="flex-shrink-0 w-7 h-7 rounded-full bg-emerald-500/20 text-emerald-400 font-bold text-sm flex items-center justify-center">3</span>
+          <span><strong class="text-slate-200">Track</strong> — Once added, the technology appears on the next daily update with release info, star counts, and trends.</span>
+        </li>
+      </ol>
+    </section>
+
+    <section class="text-center text-slate-500 text-sm">
+      <p>
+        Tech Bytes is open source.
+        <a
+          href={githubRepo}
+          target="_blank"
+          rel="noopener noreferrer"
+          class="text-emerald-400 hover:text-emerald-300 underline underline-offset-2 transition-colors"
+        >View the repository on GitHub</a>.
+      </p>
+    </section>
+  </div>
+</Base>

@@ -60,25 +60,26 @@ function formatDate(dateStr: string): string {
 ---
 
 <Base title="Trending">
-  <div class="mb-8">
-    <h1 class="text-3xl font-bold text-slate-100 mb-2">🔥 Trending This Week</h1>
-    <p class="text-slate-400 text-lg">Hot repositories on GitHub, summarized</p>
-    {data.updated_at && (
-      <p class="text-sm text-slate-500 mt-2">
-        Last updated: {formatDate(data.updated_at)}
-      </p>
-    )}
-  </div>
-
-  {data.weekly.length === 0 && data.monthly.length === 0 && (
-    <div class="text-center py-16 text-slate-500">
-      <p class="text-4xl mb-4">🔥</p>
-      <p class="text-lg">No trending data available yet.</p>
-      <p class="text-sm mt-2">Data will appear once the trending pipeline runs.</p>
+  <div data-pagefind-body>
+    <div class="mb-8">
+      <h1 class="text-3xl font-bold text-slate-100 mb-2">🔥 Trending This Week</h1>
+      <p class="text-slate-400 text-lg">Hot repositories on GitHub, summarized</p>
+      {data.updated_at && (
+        <p class="text-sm text-slate-500 mt-2">
+          Last updated: {formatDate(data.updated_at)}
+        </p>
+      )}
     </div>
-  )}
 
-  <div x-data="{ tab: 'week' }">
+    {data.weekly.length === 0 && data.monthly.length === 0 && (
+      <div class="text-center py-16 text-slate-500">
+        <p class="text-4xl mb-4">🔥</p>
+        <p class="text-lg">No trending data available yet.</p>
+        <p class="text-sm mt-2">Data will appear once the trending pipeline runs.</p>
+      </div>
+    )}
+
+    <div x-data="{ tab: 'week' }">
     <div class="flex gap-2 mb-6">
       <button
         x-on:click="tab = 'week'"
@@ -172,6 +173,7 @@ function formatDate(dateStr: string): string {
           <p class="text-slate-300 text-sm leading-relaxed">{repo.summary}</p>
         </article>
       ))}
+    </div>
     </div>
   </div>
 </Base>
