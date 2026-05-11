@@ -1,0 +1,44 @@
+{
+  "updated_at": "2026-05-11T00:00:00Z",
+  "categories": [
+    {
+      "name": "Node.js",
+      "icon": "nodejs",
+      "category": "Runtimes",
+      "releases": [
+        {
+          "version": "22.14.0",
+          "date": "2026-04-28",
+          "summary": "SQLite improvements and new diagnostics channel hooks",
+          "details": "- node:sqlite: Added WAL mode support and prepared statement caching\n- Diagnostics Channel: New http.client.request.created and http.server.response.created hooks\n- Sea: Single executable applications now support embedding multiple assets"
+        }
+      ]
+    },
+    {
+      "name": "React",
+      "icon": "react",
+      "category": "Frontend",
+      "releases": [
+        {
+          "version": "19.0.1",
+          "date": "2026-04-15",
+          "summary": "Patch release with hydration mismatch fixes",
+          "details": "- Fixed hydration mismatch warnings for style tags in Server Components\n- Corrected useActionState error boundary propagation\n- Fixed memory leak in use() hook when used with abandoned promises"
+        }
+      ]
+    },
+    {
+      "name": "Go",
+      "icon": "go",
+      "category": "Runtimes",
+      "releases": [
+        {
+          "version": "1.24.2",
+          "date": "2026-04-20",
+          "summary": "Security patch for crypto/tls and net/http",
+          "details": "- CVE-2026-1234: Fixed TLS session ticket rotation vulnerability\n- CVE-2026-1235: Fixed request smuggling via malformed Transfer-Encoding headers\n- Fixed compiler crash when using generic type aliases with embedded interfaces"
+        }
+      ]
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 ---
-import Base from '../layouts/Base.astro';
-import { readFileSync } from 'node:fs';
+import Base from '../../../layouts/Base.astro';
+import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 interface Repo {
@@ -19,13 +19,37 @@ interface TrendingData {
   monthly: Repo[];
 }
 
+export function getStaticPaths() {
+  const archiveDir = resolve(process.cwd(), '..', 'data', 'archive', 'gh-trending');
+  let dates: string[] = [];
+  try {
+    dates = readdirSync(archiveDir)
+      .filter((f) => f.endsWith('.json'))
+      .map((f) => f.replace('.json', ''))
+      .sort();
+  } catch {
+    // directory doesn't exist yet
+  }
+
+  return dates.map((date, index) => ({
+    params: { date },
+    props: {
+      prevDate: index > 0 ? dates[index - 1] : null,
+      nextDate: index < dates.length - 1 ? dates[index + 1] : null,
+    },
+  }));
+}
+
+const { date } = Astro.params;
+const { prevDate, nextDate } = Astro.props;
+
 let data: TrendingData = { updated_at: '', weekly: [], monthly: [] };
 
 try {
-  const dataPath = resolve(process.cwd(), '..', 'data', 'gh-trending.json');
+  const dataPath = resolve(process.cwd(), '..', 'data', 'archive', 'gh-trending', `${date}.json`);
   data = JSON.parse(readFileSync(dataPath, 'utf-8'));
 } catch {
-  // data file not found — use empty defaults
+  // data file not found
 }
 
 const languageColors: Record<string, string> = {
@@ -50,40 +74,57 @@ function formatStars(stars: number): string {
   return stars.toString();
 }
 
-function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('en-US', {
-    month: 'short',
+function formatDateStr(dateStr: string): string {
+  return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
     day: 'numeric',
     year: 'numeric',
   });
 }
 ---
 
-<Base title="Trending">
-  <div data-pagefind-body>
-    <div class="mb-8">
-      <h1 class="text-3xl font-bold text-slate-100 mb-2">🔥 Trending This Week</h1>
-      <p class="text-slate-400 text-lg">Hot repositories on GitHub, summarized</p>
-      <div class="flex items-center gap-3 mt-2">
-        {data.updated_at && (
-          <p class="text-sm text-slate-500">
-            Last updated: {formatDate(data.updated_at)}
-          </p>
-        )}
-        <a
-          href="/archive#gh-trending"
-          class="text-xs text-slate-500 hover:text-emerald-400 border border-slate-700 hover:border-emerald-400/50 rounded px-2 py-0.5 transition-colors"
-        >
-          Browse archive
-        </a>
-      </div>
+<Base title={`Trending — ${date}`}>
+  <div>
+    <div class="mb-6">
+      <a href="/archive" class="text-sm text-slate-500 hover:text-emerald-400 transition-colors">
+        &larr; Back to archive
+      </a>
     </div>
+
+    <div class="mb-8">
+      <h1 class="text-3xl font-bold text-slate-100 mb-2">Trending This Week</h1>
+      <p class="text-slate-400 text-lg">Hot repositories on GitHub, summarized</p>
+      <p class="text-sm text-slate-500 mt-2">{formatDateStr(date ?? '')}</p>
+    </div>
+
+    <nav class="flex items-center justify-between mb-8">
+      {prevDate ? (
+        <a
+          href={`/archive/gh-trending/${prevDate}`}
+          class="text-sm text-slate-400 hover:text-emerald-400 transition-colors"
+        >
+          &larr; {prevDate}
+        </a>
+      ) : (
+        <span />
+      )}
+      {nextDate ? (
+        <a
+          href={`/archive/gh-trending/${nextDate}`}
+          class="text-sm text-slate-400 hover:text-emerald-400 transition-colors"
+        >
+          {nextDate} &rarr;
+        </a>
+      ) : (
+        <span />
+      )}
+    </nav>
 
     {data.weekly.length === 0 && data.monthly.length === 0 && (
       <div class="text-center py-16 text-slate-500">
-        <p class="text-4xl mb-4">🔥</p>
-        <p class="text-lg">No trending data available yet.</p>
-        <p class="text-sm mt-2">Data will appear once the trending pipeline runs.</p>
+        <p class="text-4xl mb-4">{'\u{1F525}'}</p>
+        <p class="text-lg">No trending data available for this date.</p>
       </div>
     )}
 
@@ -124,7 +165,7 @@ function formatDate(dateStr: string): string {
             </div>
             <div class="flex flex-col items-end gap-1 shrink-0">
               <span class="text-slate-300 font-mono text-sm flex items-center gap-1">
-                ⭐ {formatStars(repo.stars)}
+                {'\u2B50'} {formatStars(repo.stars)}
               </span>
               <span class="text-emerald-400 text-xs font-medium">
                 +{formatStars(repo.stars_this_period)} this week
@@ -163,7 +204,7 @@ function formatDate(dateStr: string): string {
             </div>
             <div class="flex flex-col items-end gap-1 shrink-0">
               <span class="text-slate-300 font-mono text-sm flex items-center gap-1">
-                ⭐ {formatStars(repo.stars)}
+                {'\u2B50'} {formatStars(repo.stars)}
               </span>
               <span class="text-emerald-400 text-xs font-medium">
                 +{formatStars(repo.stars_this_period)} this month
@@ -183,6 +224,29 @@ function formatDate(dateStr: string): string {
       ))}
     </div>
     </div>
+
+    <nav class="flex items-center justify-between mt-8 pt-6 border-t border-slate-800">
+      {prevDate ? (
+        <a
+          href={`/archive/gh-trending/${prevDate}`}
+          class="text-sm text-slate-400 hover:text-emerald-400 transition-colors"
+        >
+          &larr; {prevDate}
+        </a>
+      ) : (
+        <span />
+      )}
+      {nextDate ? (
+        <a
+          href={`/archive/gh-trending/${nextDate}`}
+          class="text-sm text-slate-400 hover:text-emerald-400 transition-colors"
+        >
+          {nextDate} &rarr;
+        </a>
+      ) : (
+        <span />
+      )}
+    </nav>
   </div>
 </Base>
 

@@ -32,6 +32,15 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Download latest data from S3
+        run: |
+          BUCKET=$(aws cloudformation describe-stacks --stack-name TechBytesStack --query "Stacks[0].Outputs[?OutputKey=='BucketName'].OutputValue" --output text)
+          mkdir -p data
+          aws s3 sync "s3://${BUCKET}/data/" data/ --exclude "archive/*" || true
+          aws s3 sync "s3://${BUCKET}/data/archive/" data/archive/ || true
+        env:
+          AWS_REGION: ap-southeast-1
+
       - name: Install and build site
         working-directory: site
         run: |

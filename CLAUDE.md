@@ -24,6 +24,21 @@ Three functions, each triggered daily by EventBridge:
 
 All use OpenAI API for summarization. Output goes to S3 as JSON, consumed by Astro at build time.
 
+## Auto-rebuild
+
+After each Lambda writes new data to S3, it triggers a GitHub Actions `workflow_dispatch`
+on `deploy.yml` to rebuild and redeploy the site with fresh data. This requires a GitHub
+Personal Access Token (PAT) with `actions:write` scope stored in SSM.
+
+The existing `/tech-bytes/github-token` SSM parameter is set to `PLACEHOLDER`. To enable
+the auto-rebuild trigger, replace it with a real PAT:
+
+```bash
+aws ssm put-parameter --name /tech-bytes/github-token --value "ghp_..." --type SecureString --overwrite --profile super-personal
+```
+
+The token needs the `actions:write` scope on the `datj9/tech-bytes` repository.
+
 ## Dev commands
 
 ```bash

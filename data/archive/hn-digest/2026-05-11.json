@@ -1,0 +1,45 @@
+{
+  "date": "2026-05-11",
+  "stories": [
+    {
+      "title": "Building a Distributed SQLite with Raft Consensus",
+      "url": "https://blog.example.com/distributed-sqlite-raft",
+      "score": 745,
+      "comments": 289,
+      "hn_url": "https://news.ycombinator.com/item?id=41234500",
+      "summary": "A deep dive into building a distributed version of SQLite using Raft consensus protocol. The author demonstrates how to maintain SQLite's simplicity while adding horizontal scalability. Community discussion covers trade-offs versus existing solutions like rqlite and LiteFS."
+    },
+    {
+      "title": "WebAssembly Garbage Collection Ships in All Major Browsers",
+      "url": "https://web.dev/blog/wasm-gc-shipped",
+      "score": 612,
+      "comments": 201,
+      "hn_url": "https://news.ycombinator.com/item?id=41234501",
+      "summary": "WasmGC is now available in Chrome, Firefox, and Safari, enabling languages like Kotlin, Dart, and Java to compile to smaller, faster Wasm modules. The post explains how GC integration reduces binary sizes by 50% compared to linear-memory GC implementations."
+    },
+    {
+      "title": "The Hidden Costs of Microservices Nobody Talks About",
+      "url": "https://blog.example.com/microservices-hidden-costs",
+      "score": 534,
+      "comments": 412,
+      "hn_url": "https://news.ycombinator.com/item?id=41234502",
+      "summary": "An engineering lead at a mid-size startup shares their experience with microservices overhead: distributed tracing complexity, network latency debugging, and the cognitive load of managing 40+ services with a 12-person team. Advocates for starting monolithic and splitting only when necessary."
+    },
+    {
+      "title": "Rust 2026 Edition: What's New and Migration Guide",
+      "url": "https://blog.rust-lang.org/2026/05/rust-2026-edition",
+      "score": 498,
+      "comments": 178,
+      "hn_url": "https://news.ycombinator.com/item?id=41234503",
+      "summary": "The Rust 2026 edition brings async closures, gen blocks for generators, and improved borrow checker ergonomics. The migration is mostly automated via cargo fix. Discussion highlights how the new edition makes async Rust significantly more approachable for newcomers."
+    },
+    {
+      "title": "Show HN: Open-Source Alternative to Datadog Built on ClickHouse",
+      "url": "https://github.com/example/obsrv",
+      "score": 421,
+      "comments": 156,
+      "hn_url": "https://news.ycombinator.com/item?id=41234504",
+      "summary": "A new open-source observability platform using ClickHouse for storage, claiming 10x cost reduction compared to Datadog at scale. Supports OpenTelemetry natively and includes dashboards, alerting, and log aggregation. HN discussion debates sustainability of the open-source model versus SaaS observability."
+    }
+  ]
+}

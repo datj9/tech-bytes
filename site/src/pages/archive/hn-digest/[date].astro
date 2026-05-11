@@ -1,0 +1,177 @@
+---
+import Base from '../../../layouts/Base.astro';
+import { readFileSync, readdirSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+interface Story {
+  title: string;
+  url: string;
+  score: number;
+  comments: number;
+  hn_url: string;
+  summary: string;
+}
+
+interface HNData {
+  date: string;
+  stories: Story[];
+}
+
+export function getStaticPaths() {
+  const archiveDir = resolve(process.cwd(), '..', 'data', 'archive', 'hn-digest');
+  let dates: string[] = [];
+  try {
+    dates = readdirSync(archiveDir)
+      .filter((f) => f.endsWith('.json'))
+      .map((f) => f.replace('.json', ''))
+      .sort();
+  } catch {
+    // directory doesn't exist yet
+  }
+
+  return dates.map((date, index) => ({
+    params: { date },
+    props: {
+      prevDate: index > 0 ? dates[index - 1] : null,
+      nextDate: index < dates.length - 1 ? dates[index + 1] : null,
+    },
+  }));
+}
+
+const { date } = Astro.params;
+const { prevDate, nextDate } = Astro.props;
+
+let data: HNData = { date: date ?? '', stories: [] };
+
+try {
+  const dataPath = resolve(process.cwd(), '..', 'data', 'archive', 'hn-digest', `${date}.json`);
+  data = JSON.parse(readFileSync(dataPath, 'utf-8'));
+} catch {
+  // data file not found
+}
+
+function formatDate(dateStr: string): string {
+  return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+function getDomain(url: string): string {
+  try {
+    return new URL(url).hostname.replace('www.', '');
+  } catch {
+    return '';
+  }
+}
+---
+
+<Base title={`HN Digest — ${date}`}>
+  <div>
+    <div class="mb-6">
+      <a href="/archive" class="text-sm text-slate-500 hover:text-emerald-400 transition-colors">
+        &larr; Back to archive
+      </a>
+    </div>
+
+    <div class="mb-8">
+      <h1 class="text-3xl font-bold text-slate-100 mb-2">HN Daily Digest</h1>
+      <p class="text-slate-400 text-lg">Top Hacker News stories, summarized</p>
+      <p class="text-sm text-slate-500 mt-2">{formatDate(data.date || date || '')}</p>
+    </div>
+
+    <nav class="flex items-center justify-between mb-8">
+      {prevDate ? (
+        <a
+          href={`/archive/hn-digest/${prevDate}`}
+          class="text-sm text-slate-400 hover:text-emerald-400 transition-colors"
+        >
+          &larr; {prevDate}
+        </a>
+      ) : (
+        <span />
+      )}
+      {nextDate ? (
+        <a
+          href={`/archive/hn-digest/${nextDate}`}
+          class="text-sm text-slate-400 hover:text-emerald-400 transition-colors"
+        >
+          {nextDate} &rarr;
+        </a>
+      ) : (
+        <span />
+      )}
+    </nav>
+
+    {data.stories.length === 0 && (
+      <div class="text-center py-16 text-slate-500">
+        <p class="text-4xl mb-4">{'\u{1F4F0}'}</p>
+        <p class="text-lg">No digest available for this date.</p>
+      </div>
+    )}
+
+    <div class="space-y-4">
+      {data.stories.map((story, index) => (
+        <article class="border border-slate-800 rounded-xl p-6 hover:border-slate-700 transition-colors">
+          <div class="flex items-start gap-4">
+            <span class="text-2xl font-bold text-slate-700 min-w-[2rem] text-right">
+              {index + 1}
+            </span>
+            <div class="flex-1 min-w-0">
+              <h2 class="text-lg font-semibold text-slate-100 mb-1">
+                <a
+                  href={story.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="hover:text-emerald-400 transition-colors"
+                >
+                  {story.title}
+                </a>
+              </h2>
+              <div class="flex flex-wrap items-center gap-3 text-sm text-slate-500 mb-3">
+                <span class="text-slate-600">{getDomain(story.url)}</span>
+                <span class="flex items-center gap-1">
+                  <span class="text-emerald-500">{'\u25B2'}</span> {story.score}
+                </span>
+                <a
+                  href={story.hn_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="flex items-center gap-1 hover:text-orange-400 transition-colors"
+                >
+                  {'\u{1F4AC}'} {story.comments} comments
+                </a>
+              </div>
+              <p class="text-slate-300 leading-relaxed">{story.summary}</p>
+            </div>
+          </div>
+        </article>
+      ))}
+    </div>
+
+    <nav class="flex items-center justify-between mt-8 pt-6 border-t border-slate-800">
+      {prevDate ? (
+        <a
+          href={`/archive/hn-digest/${prevDate}`}
+          class="text-sm text-slate-400 hover:text-emerald-400 transition-colors"
+        >
+          &larr; {prevDate}
+        </a>
+      ) : (
+        <span />
+      )}
+      {nextDate ? (
+        <a
+          href={`/archive/hn-digest/${nextDate}`}
+          class="text-sm text-slate-400 hover:text-emerald-400 transition-colors"
+        >
+          {nextDate} &rarr;
+        </a>
+      ) : (
+        <span />
+      )}
+    </nav>
+  </div>
+</Base>
