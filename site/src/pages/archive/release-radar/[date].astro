@@ -1,0 +1,231 @@
+---
+import Base from '../../../layouts/Base.astro';
+import { readFileSync, readdirSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+interface Release {
+  version: string;
+  date: string;
+  summary: string;
+  details: string;
+}
+
+interface Category {
+  name: string;
+  icon: string;
+  category?: string;
+  releases: Release[];
+}
+
+interface ReleaseData {
+  updated_at: string;
+  categories: Category[];
+}
+
+export function getStaticPaths() {
+  const archiveDir = resolve(process.cwd(), '..', 'data', 'archive', 'release-radar');
+  let dates: string[] = [];
+  try {
+    dates = readdirSync(archiveDir)
+      .filter((f) => f.endsWith('.json'))
+      .map((f) => f.replace('.json', ''))
+      .sort();
+  } catch {
+    // directory doesn't exist yet
+  }
+
+  return dates.map((date, index) => ({
+    params: { date },
+    props: {
+      prevDate: index > 0 ? dates[index - 1] : null,
+      nextDate: index < dates.length - 1 ? dates[index + 1] : null,
+    },
+  }));
+}
+
+const { date } = Astro.params;
+const { prevDate, nextDate } = Astro.props;
+
+let data: ReleaseData = { updated_at: '', categories: [] };
+
+try {
+  const dataPath = resolve(process.cwd(), '..', 'data', 'archive', 'release-radar', `${date}.json`);
+  data = JSON.parse(readFileSync(dataPath, 'utf-8'));
+} catch {
+  // data file not found
+}
+
+const categoryIcons: Record<string, string> = {
+  Runtimes: '\u{1F680}',
+  Frontend: '\u269B\uFE0F',
+  'Meta-Frameworks': '\u{1F4E6}',
+  Languages: '\u{1F537}',
+  CSS: '\u{1F3A8}',
+  'Build Tools': '\u{1F527}',
+  Infrastructure: '\u{1F3D7}\uFE0F',
+  nodejs: '\u{1F7E2}',
+  react: '\u269B\uFE0F',
+  go: '\u{1F439}',
+  python: '\u{1F40D}',
+  rust: '\u{1F980}',
+  typescript: '\u{1F537}',
+  deno: '\u{1F995}',
+  bun: '\u{1F35E}',
+};
+
+function formatDateStr(dateStr: string): string {
+  return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+function formatShortDate(dateStr: string): string {
+  return new Date(dateStr).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
+type GroupedSection = { label: string; items: Category[] };
+
+function groupByCategory(categories: Category[]): GroupedSection[] {
+  const hasCategory = categories.some((c) => c.category);
+  if (!hasCategory) {
+    return [{ label: '', items: categories }];
+  }
+
+  const grouped = new Map<string, Category[]>();
+  for (const cat of categories) {
+    const key = cat.category ?? 'Other';
+    const list = grouped.get(key) ?? [];
+    list.push(cat);
+    grouped.set(key, list);
+  }
+  return Array.from(grouped.entries()).map(([label, items]) => ({ label, items }));
+}
+
+const sections = groupByCategory(data.categories);
+---
+
+<Base title={`Release Radar — ${date}`}>
+  <div>
+    <div class="mb-6">
+      <a href="/archive" class="text-sm text-slate-500 hover:text-emerald-400 transition-colors">
+        &larr; Back to archive
+      </a>
+    </div>
+
+    <div class="mb-8">
+      <h1 class="text-3xl font-bold text-slate-100 mb-2">Release Radar</h1>
+      <p class="text-slate-400 text-lg">Latest version updates across frameworks, runtimes, and languages</p>
+      <p class="text-sm text-slate-500 mt-2">{formatDateStr(date ?? '')}</p>
+    </div>
+
+    <nav class="flex items-center justify-between mb-8">
+      {prevDate ? (
+        <a
+          href={`/archive/release-radar/${prevDate}`}
+          class="text-sm text-slate-400 hover:text-emerald-400 transition-colors"
+        >
+          &larr; {prevDate}
+        </a>
+      ) : (
+        <span />
+      )}
+      {nextDate ? (
+        <a
+          href={`/archive/release-radar/${nextDate}`}
+          class="text-sm text-slate-400 hover:text-emerald-400 transition-colors"
+        >
+          {nextDate} &rarr;
+        </a>
+      ) : (
+        <span />
+      )}
+    </nav>
+
+    {data.categories.length === 0 && (
+      <div class="text-center py-16 text-slate-500">
+        <p class="text-4xl mb-4">{'\u{1F4E6}'}</p>
+        <p class="text-lg">No release data available for this date.</p>
+      </div>
+    )}
+
+    <div class="space-y-10">
+      {sections.map((section) => (
+        <div>
+          {section.label && (
+            <div class="flex items-center gap-3 mb-4">
+              <span class="text-2xl">{categoryIcons[section.label] ?? '\u{1F4CB}'}</span>
+              <h2 class="text-2xl font-bold text-slate-100">{section.label}</h2>
+            </div>
+          )}
+
+          <div class="space-y-6">
+            {section.items.map((category) => (
+              <section class="border border-slate-800 rounded-xl overflow-hidden">
+                <div class="bg-slate-800/50 px-6 py-4 flex items-center gap-3">
+                  <span class="text-2xl">{categoryIcons[category.icon] ?? categoryIcons[category.name] ?? '\u{1F4CB}'}</span>
+                  <h3 class="text-xl font-semibold text-slate-100">{category.name}</h3>
+                  {category.category && (
+                    <span class="text-xs text-slate-500 bg-slate-800 px-2 py-0.5 rounded-full">
+                      {category.category}
+                    </span>
+                  )}
+                  <span class="ms-auto text-sm text-slate-500">
+                    {category.releases.length} release{category.releases.length !== 1 ? 's' : ''}
+                  </span>
+                </div>
+
+                <div class="divide-y divide-slate-800">
+                  {category.releases.map((release) => (
+                    <details class="group">
+                      <summary class="px-6 py-4 cursor-pointer hover:bg-slate-800/30 transition-colors flex items-center gap-4 list-none [&::-webkit-details-marker]:hidden">
+                        <span class="text-emerald-400 font-mono font-bold text-lg">{release.version}</span>
+                        <span class="text-slate-400 text-sm">{formatShortDate(release.date)}</span>
+                        <span class="ms-auto text-slate-500 group-open:rotate-90 transition-transform">{'\u25B6'}</span>
+                      </summary>
+                      <div class="px-6 pb-4">
+                        <p class="text-slate-300 mb-4">{release.summary}</p>
+                        <div class="bg-slate-800/50 rounded-lg p-4 text-sm text-slate-300 leading-relaxed whitespace-pre-line border border-slate-700/50">
+                          {release.details}
+                        </div>
+                      </div>
+                    </details>
+                  ))}
+                </div>
+              </section>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+
+    <nav class="flex items-center justify-between mt-8 pt-6 border-t border-slate-800">
+      {prevDate ? (
+        <a
+          href={`/archive/release-radar/${prevDate}`}
+          class="text-sm text-slate-400 hover:text-emerald-400 transition-colors"
+        >
+          &larr; {prevDate}
+        </a>
+      ) : (
+        <span />
+      )}
+      {nextDate ? (
+        <a
+          href={`/archive/release-radar/${nextDate}`}
+          class="text-sm text-slate-400 hover:text-emerald-400 transition-colors"
+        >
+          {nextDate} &rarr;
+        </a>
+      ) : (
+        <span />
+      )}
+    </nav>
+  </div>
+</Base>

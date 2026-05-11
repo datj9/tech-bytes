@@ -8,6 +8,7 @@ from typing import Any
 
 import requests
 
+from shared.rebuild import trigger_rebuild
 from shared.utils import summarize, today_str, upload_to_s3
 
 logger = logging.getLogger(__name__)
@@ -150,6 +151,14 @@ def handler(event: Any = None, context: Any = None) -> dict[str, Any]:
         upload_to_s3(output, S3_KEY)
     except Exception:
         logger.exception("Failed to upload to S3")
+
+    try:
+        archive_key = f"data/archive/hn-digest/{today_str()}.json"
+        upload_to_s3(output, archive_key)
+    except Exception:
+        logger.exception("Failed to upload archive copy to S3")
+
+    trigger_rebuild()
 
     logger.info("HN Digest complete — processed %d stories", len(results))
     return output

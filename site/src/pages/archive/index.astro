@@ -1,0 +1,108 @@
+---
+import Base from '../../layouts/Base.astro';
+import { readdirSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+interface ArchiveSection {
+  name: string;
+  slug: string;
+  icon: string;
+  description: string;
+  dates: string[];
+}
+
+function readArchiveDates(dirName: string): string[] {
+  try {
+    const dirPath = resolve(process.cwd(), '..', 'data', 'archive', dirName);
+    const files = readdirSync(dirPath)
+      .filter((f) => f.endsWith('.json'))
+      .map((f) => f.replace('.json', ''))
+      .sort()
+      .reverse();
+    return files;
+  } catch {
+    return [];
+  }
+}
+
+const sections: ArchiveSection[] = [
+  {
+    name: 'HN Digest',
+    slug: 'hn-digest',
+    icon: '\u{1F4F0}',
+    description: 'Daily summaries of top Hacker News stories',
+    dates: readArchiveDates('hn-digest'),
+  },
+  {
+    name: 'Release Radar',
+    slug: 'release-radar',
+    icon: '\u{1F4E6}',
+    description: 'Version updates across frameworks, runtimes, and languages',
+    dates: readArchiveDates('release-radar'),
+  },
+  {
+    name: 'GitHub Trending',
+    slug: 'gh-trending',
+    icon: '\u{1F525}',
+    description: 'Hot repositories on GitHub, summarized',
+    dates: readArchiveDates('gh-trending'),
+  },
+];
+
+function formatDate(dateStr: string): string {
+  return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+---
+
+<Base title="Archive">
+  <div>
+    <div class="mb-8">
+      <h1 class="text-3xl font-bold text-slate-100 mb-2">Archive</h1>
+      <p class="text-slate-400 text-lg">Browse historical content across all sections</p>
+    </div>
+
+    <div class="space-y-8">
+      {sections.map((section) => (
+        <section class="border border-slate-800 rounded-xl overflow-hidden">
+          <div class="bg-slate-800/50 px-6 py-4 flex items-center gap-3">
+            <span class="text-2xl">{section.icon}</span>
+            <div>
+              <h2 class="text-xl font-semibold text-slate-100">{section.name}</h2>
+              <p class="text-sm text-slate-500">{section.description}</p>
+            </div>
+            <span class="ms-auto text-sm text-slate-500">
+              {section.dates.length} {section.dates.length === 1 ? 'entry' : 'entries'}
+            </span>
+          </div>
+
+          {section.dates.length === 0 ? (
+            <div class="px-6 py-8 text-center text-slate-500">
+              <p>No archive data available yet.</p>
+            </div>
+          ) : (
+            <div class="divide-y divide-slate-800">
+              {section.dates.map((date) => (
+                <a
+                  href={`/archive/${section.slug}/${date}`}
+                  class="flex items-center justify-between px-6 py-3 hover:bg-slate-800/30 transition-colors group"
+                >
+                  <span class="text-slate-300 group-hover:text-emerald-400 transition-colors">
+                    {formatDate(date)}
+                  </span>
+                  <span class="text-slate-600 group-hover:text-slate-400 transition-colors">
+                    &rarr;
+                  </span>
+                </a>
+              ))}
+            </div>
+          )}
+        </section>
+      ))}
+    </div>
+  </div>
+</Base>

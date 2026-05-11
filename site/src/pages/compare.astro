@@ -1,0 +1,340 @@
+---
+import Base from '../layouts/Base.astro';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+interface Release {
+  version: string;
+  date: string;
+  summary: string;
+  details: string;
+}
+
+interface Category {
+  name: string;
+  icon: string;
+  category?: string;
+  releases: Release[];
+}
+
+interface ReleaseData {
+  updated_at: string;
+  categories: Category[];
+}
+
+let data: ReleaseData = { updated_at: '', categories: [] };
+
+try {
+  const dataPath = resolve(process.cwd(), '..', 'data', 'release-radar.json');
+  data = JSON.parse(readFileSync(dataPath, 'utf-8'));
+} catch {
+  // data file not found — use empty defaults
+}
+---
+
+<Base title="Compare Versions">
+  <div class="mb-8">
+    <h1 class="text-3xl font-bold text-slate-100 mb-2">Compare Versions</h1>
+    <p class="text-slate-400 text-lg">Compare two versions of a technology side-by-side</p>
+  </div>
+
+  <!-- Selectors -->
+  <div class="bg-slate-800/50 border border-slate-700/50 rounded-xl p-6 mb-8">
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div>
+        <label for="tech-select" class="block text-sm font-medium text-slate-300 mb-2">Technology</label>
+        <select
+          id="tech-select"
+          class="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-400/50 focus:border-emerald-400"
+        >
+          <option value="">Select a technology...</option>
+        </select>
+      </div>
+      <div>
+        <label for="from-select" class="block text-sm font-medium text-slate-300 mb-2">From (older)</label>
+        <select
+          id="from-select"
+          disabled
+          class="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-emerald-400/50 focus:border-emerald-400"
+        >
+          <option value="">Select version...</option>
+        </select>
+      </div>
+      <div>
+        <label for="to-select" class="block text-sm font-medium text-slate-300 mb-2">To (newer)</label>
+        <select
+          id="to-select"
+          disabled
+          class="w-full bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-emerald-400/50 focus:border-emerald-400"
+        >
+          <option value="">Select version...</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- Prompt state -->
+  <div id="prompt-state" class="text-center py-16 text-slate-500">
+    <p class="text-4xl mb-4">🔀</p>
+    <p class="text-lg">Select a technology and two versions to compare.</p>
+  </div>
+
+  <!-- Not enough versions -->
+  <div id="single-version-state" class="text-center py-16 text-slate-500 hidden">
+    <p class="text-4xl mb-4">📋</p>
+    <p class="text-lg">This technology only has one version tracked.</p>
+    <p class="text-sm mt-2">At least two versions are needed for comparison.</p>
+  </div>
+
+  <!-- Comparison view -->
+  <div id="comparison-view" class="hidden">
+    <!-- Side-by-side -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+      <!-- From panel -->
+      <div class="border border-slate-700/50 rounded-xl overflow-hidden">
+        <div class="bg-slate-800/80 px-5 py-3 border-b border-slate-700/50 flex items-center gap-3">
+          <span class="text-xs font-semibold uppercase tracking-wider text-slate-400">From</span>
+          <span id="from-version-badge" class="text-emerald-400 font-mono font-bold"></span>
+          <span id="from-date" class="text-slate-500 text-sm ms-auto"></span>
+        </div>
+        <div class="p-5">
+          <p id="from-summary" class="text-slate-300 mb-4"></p>
+          <div id="from-details" class="bg-slate-800/50 rounded-lg p-4 text-sm text-slate-300 leading-relaxed border border-slate-700/50"></div>
+        </div>
+      </div>
+
+      <!-- To panel -->
+      <div class="border border-emerald-500/30 rounded-xl overflow-hidden">
+        <div class="bg-emerald-900/20 px-5 py-3 border-b border-emerald-500/30 flex items-center gap-3">
+          <span class="text-xs font-semibold uppercase tracking-wider text-emerald-400">To</span>
+          <span id="to-version-badge" class="text-emerald-400 font-mono font-bold"></span>
+          <span id="to-date" class="text-slate-500 text-sm ms-auto"></span>
+        </div>
+        <div class="p-5">
+          <p id="to-summary" class="text-slate-300 mb-4"></p>
+          <div id="to-details" class="bg-slate-800/50 rounded-lg p-4 text-sm text-slate-300 leading-relaxed border border-slate-700/50"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Combined changelog -->
+    <div class="border border-slate-700/50 rounded-xl overflow-hidden">
+      <div class="bg-slate-800/80 px-5 py-3 border-b border-slate-700/50">
+        <h2 class="text-lg font-semibold text-slate-100">Combined Changelog</h2>
+        <p id="changelog-range" class="text-sm text-slate-400 mt-1"></p>
+      </div>
+      <div id="changelog-entries" class="divide-y divide-slate-800"></div>
+    </div>
+  </div>
+
+  <!-- Embed data at build time -->
+  <script is:inline define:vars={{ releaseData: data }}>
+    const data = releaseData;
+
+    const techSelect = document.getElementById('tech-select');
+    const fromSelect = document.getElementById('from-select');
+    const toSelect = document.getElementById('to-select');
+    const promptState = document.getElementById('prompt-state');
+    const singleVersionState = document.getElementById('single-version-state');
+    const comparisonView = document.getElementById('comparison-view');
+
+    // Populate technology dropdown
+    data.categories.forEach((cat) => {
+      const opt = document.createElement('option');
+      opt.value = cat.name;
+      opt.textContent = cat.name + (cat.category ? ' (' + cat.category + ')' : '');
+      techSelect.appendChild(opt);
+    });
+
+    function getCategoryByName(name) {
+      return data.categories.find((c) => c.name === name) || null;
+    }
+
+    function formatDate(dateStr) {
+      return new Date(dateStr).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      });
+    }
+
+    function renderMarkdownLite(text) {
+      // Lightweight markdown rendering for details text
+      return text
+        .split('\n')
+        .map((line) => {
+          // Headers
+          if (line.startsWith('## ')) {
+            return '<h3 class="text-emerald-400 font-semibold mt-3 mb-1">' + escapeHtml(line.slice(3)) + '</h3>';
+          }
+          // Bold
+          line = line.replace(/\*\*(.+?)\*\*/g, '<strong class="text-slate-100">$1</strong>');
+          // Code
+          line = line.replace(/`(.+?)`/g, '<code class="bg-slate-700/50 px-1 rounded text-emerald-300 text-xs">$1</code>');
+          // List items
+          if (line.startsWith('- ')) {
+            return '<li class="ms-4 list-disc">' + line.slice(2) + '</li>';
+          }
+          // Empty line
+          if (line.trim() === '') {
+            return '<br>';
+          }
+          return '<p>' + line + '</p>';
+        })
+        .join('\n');
+    }
+
+    function escapeHtml(str) {
+      const el = document.createElement('span');
+      el.textContent = str;
+      return el.innerHTML;
+    }
+
+    function populateVersionDropdowns(cat) {
+      // Releases are ordered newest first in the data; keep that order for "To"
+      // and reverse for "From" (oldest first would be confusing — keep newest first for both)
+      const releases = cat.releases;
+
+      fromSelect.innerHTML = '<option value="">Select version...</option>';
+      toSelect.innerHTML = '<option value="">Select version...</option>';
+
+      releases.forEach((r) => {
+        const optFrom = document.createElement('option');
+        optFrom.value = r.version;
+        optFrom.textContent = r.version + ' (' + formatDate(r.date) + ')';
+        fromSelect.appendChild(optFrom);
+
+        const optTo = document.createElement('option');
+        optTo.value = r.version;
+        optTo.textContent = r.version + ' (' + formatDate(r.date) + ')';
+        toSelect.appendChild(optTo);
+      });
+
+      fromSelect.disabled = false;
+      toSelect.disabled = false;
+
+      // Auto-select when there are exactly 2 versions
+      if (releases.length === 2) {
+        fromSelect.value = releases[1].version; // older
+        toSelect.value = releases[0].version; // newer
+        renderComparison();
+      } else if (releases.length >= 2) {
+        // Pre-select oldest as From, newest as To
+        fromSelect.value = releases[releases.length - 1].version;
+        toSelect.value = releases[0].version;
+        renderComparison();
+      }
+    }
+
+    function renderComparison() {
+      const techName = techSelect.value;
+      const fromVersion = fromSelect.value;
+      const toVersion = toSelect.value;
+
+      if (!techName || !fromVersion || !toVersion) {
+        comparisonView.classList.add('hidden');
+        promptState.classList.remove('hidden');
+        singleVersionState.classList.add('hidden');
+        return;
+      }
+
+      const cat = getCategoryByName(techName);
+      if (!cat) return;
+
+      const fromRelease = cat.releases.find((r) => r.version === fromVersion);
+      const toRelease = cat.releases.find((r) => r.version === toVersion);
+      if (!fromRelease || !toRelease) return;
+
+      // Determine chronological order (older on left, newer on right)
+      const fromDate = new Date(fromRelease.date);
+      const toDate = new Date(toRelease.date);
+      const olderRelease = fromDate <= toDate ? fromRelease : toRelease;
+      const newerRelease = fromDate <= toDate ? toRelease : fromRelease;
+
+      // Update panels
+      document.getElementById('from-version-badge').textContent = 'v' + olderRelease.version;
+      document.getElementById('from-date').textContent = formatDate(olderRelease.date);
+      document.getElementById('from-summary').textContent = olderRelease.summary;
+      document.getElementById('from-details').innerHTML = renderMarkdownLite(olderRelease.details);
+
+      document.getElementById('to-version-badge').textContent = 'v' + newerRelease.version;
+      document.getElementById('to-date').textContent = formatDate(newerRelease.date);
+      document.getElementById('to-summary').textContent = newerRelease.summary;
+      document.getElementById('to-details').innerHTML = renderMarkdownLite(newerRelease.details);
+
+      // Combined changelog: all versions between from and to (inclusive)
+      const olderIdx = cat.releases.findIndex((r) => r.version === olderRelease.version);
+      const newerIdx = cat.releases.findIndex((r) => r.version === newerRelease.version);
+      const startIdx = Math.min(olderIdx, newerIdx);
+      const endIdx = Math.max(olderIdx, newerIdx);
+      const betweenReleases = cat.releases.slice(startIdx, endIdx + 1);
+
+      document.getElementById('changelog-range').textContent =
+        'All releases from v' + olderRelease.version + ' to v' + newerRelease.version +
+        ' (' + betweenReleases.length + ' release' + (betweenReleases.length !== 1 ? 's' : '') + ')';
+
+      const entriesEl = document.getElementById('changelog-entries');
+      entriesEl.innerHTML = '';
+
+      betweenReleases.forEach((release) => {
+        const entry = document.createElement('div');
+        entry.className = 'px-5 py-4';
+
+        const isNewer = release.version === newerRelease.version;
+        const badgeColor = isNewer ? 'bg-emerald-900/30 text-emerald-400 border-emerald-500/30' : 'bg-slate-800 text-slate-300 border-slate-600';
+
+        entry.innerHTML =
+          '<div class="flex items-center gap-3 mb-2">' +
+            '<span class="font-mono font-bold text-lg ' + (isNewer ? 'text-emerald-400' : 'text-slate-200') + '">v' + release.version + '</span>' +
+            '<span class="text-sm text-slate-500">' + formatDate(release.date) + '</span>' +
+            (isNewer ? '<span class="text-xs px-2 py-0.5 rounded-full border ' + badgeColor + '">latest</span>' : '') +
+          '</div>' +
+          '<p class="text-slate-400 text-sm mb-3">' + escapeHtml(release.summary) + '</p>' +
+          '<div class="bg-slate-800/50 rounded-lg p-4 text-sm text-slate-300 leading-relaxed border border-slate-700/50">' +
+            renderMarkdownLite(release.details) +
+          '</div>';
+
+        entriesEl.appendChild(entry);
+      });
+
+      // Show comparison, hide prompts
+      comparisonView.classList.remove('hidden');
+      promptState.classList.add('hidden');
+      singleVersionState.classList.add('hidden');
+    }
+
+    techSelect.addEventListener('change', () => {
+      const techName = techSelect.value;
+      if (!techName) {
+        fromSelect.innerHTML = '<option value="">Select version...</option>';
+        toSelect.innerHTML = '<option value="">Select version...</option>';
+        fromSelect.disabled = true;
+        toSelect.disabled = true;
+        comparisonView.classList.add('hidden');
+        promptState.classList.remove('hidden');
+        singleVersionState.classList.add('hidden');
+        return;
+      }
+
+      const cat = getCategoryByName(techName);
+      if (!cat) return;
+
+      if (cat.releases.length < 2) {
+        fromSelect.innerHTML = '<option value="">Select version...</option>';
+        toSelect.innerHTML = '<option value="">Select version...</option>';
+        fromSelect.disabled = true;
+        toSelect.disabled = true;
+        comparisonView.classList.add('hidden');
+        promptState.classList.add('hidden');
+        singleVersionState.classList.remove('hidden');
+        return;
+      }
+
+      singleVersionState.classList.add('hidden');
+      populateVersionDropdowns(cat);
+    });
+
+    fromSelect.addEventListener('change', renderComparison);
+    toSelect.addEventListener('change', renderComparison);
+  </script>
+</Base>

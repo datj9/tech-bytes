@@ -1,0 +1,45 @@
+{
+  "date": "2026-05-12",
+  "stories": [
+    {
+      "title": "SQLite as a Production Database: Lessons After 2 Years",
+      "url": "https://blog.example.com/sqlite-production",
+      "score": 892,
+      "comments": 342,
+      "hn_url": "https://news.ycombinator.com/item?id=41234567",
+      "summary": "Author shares their experience running SQLite as the primary database for a SaaS product serving 50k users. Key takeaways: WAL mode is essential for concurrent reads, Litestream provides reliable replication, and the single-writer model actually simplifies architecture. Discussion highlights trade-offs vs. PostgreSQL and where SQLite falls short (multi-region, very high write throughput)."
+    },
+    {
+      "title": "Show HN: I Built a Local-First Code Editor in Rust",
+      "url": "https://github.com/example/nova-editor",
+      "score": 654,
+      "comments": 198,
+      "hn_url": "https://news.ycombinator.com/item?id=41234568",
+      "summary": "A new open-source code editor built entirely in Rust using GPU rendering via wgpu. Claims sub-millisecond input latency and support for 10M+ line files. Uses CRDTs for real-time collaboration. HN discussion focuses on comparisons with Zed, performance benchmarks, and the viability of Rust for GUI applications."
+    },
+    {
+      "title": "The End of Moore's Law Means the Beginning of Hardware Diversity",
+      "url": "https://spectrum.ieee.org/hardware-diversity-2026",
+      "score": 521,
+      "comments": 267,
+      "hn_url": "https://news.ycombinator.com/item?id=41234569",
+      "summary": "IEEE article arguing that the slowdown in transistor density gains is accelerating the shift toward specialized hardware (TPUs, NPUs, RISC-V co-processors). Discussion covers implications for software developers, whether ARM's dominance will fragment, and how RISC-V is changing the economics of chip design."
+    },
+    {
+      "title": "PostgreSQL 18 Beta 1 Released with Native Async I/O",
+      "url": "https://www.postgresql.org/about/news/pg18beta1/",
+      "score": 487,
+      "comments": 156,
+      "hn_url": "https://news.ycombinator.com/item?id=41234570",
+      "summary": "PostgreSQL 18 introduces native async I/O using io_uring on Linux, claiming 40% throughput improvement for I/O-heavy workloads. Other features include virtual generated columns, improved JSON path queries, and UUIDv7 support. HN comments discuss migration strategies, io_uring security concerns, and benchmarks against MySQL 9."
+    },
+    {
+      "title": "Why We Moved from Kubernetes to Bare Metal (and Saved 70%)",
+      "url": "https://blog.example.com/k8s-to-bare-metal",
+      "score": 445,
+      "comments": 312,
+      "hn_url": "https://news.ycombinator.com/item?id=41234571",
+      "summary": "A startup details their migration from a managed Kubernetes cluster (EKS) to bare metal servers using NixOS for configuration management. Monthly infrastructure costs dropped from $45k to $14k. The heated HN discussion debates whether this is repeatable, the hidden costs of self-managing hardware, and when Kubernetes overhead is justified."
+    }
+  ]
+}

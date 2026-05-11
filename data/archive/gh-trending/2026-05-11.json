@@ -1,0 +1,52 @@
+{
+  "updated_at": "2026-05-11T00:00:00Z",
+  "weekly": [
+    {
+      "name": "astral-sh/uv",
+      "url": "https://github.com/astral-sh/uv",
+      "description": "An extremely fast Python package installer and resolver, written in Rust",
+      "language": "Rust",
+      "stars": 51500,
+      "stars_this_period": 2900,
+      "summary": "Astral's Rust-based Python package manager that replaces pip, virtualenv, and pip-tools with a single blazing-fast binary. Trending after v0.6 added lockfile support, workspace management, and Python version management."
+    },
+    {
+      "name": "DiceDB/dice",
+      "url": "https://github.com/DiceDB/dice",
+      "description": "A drop-in replacement for Redis with SQL-based reactivity",
+      "language": "Go",
+      "stars": 8700,
+      "stars_this_period": 1900,
+      "summary": "A Redis-compatible in-memory database written in Go that adds SQL-like query support and real-time reactivity. Trending after benchmarks showed comparable performance to Redis 7."
+    },
+    {
+      "name": "pydantic/logfire",
+      "url": "https://github.com/pydantic/logfire",
+      "description": "Uncomplicated observability for Python",
+      "language": "Python",
+      "stars": 5600,
+      "stars_this_period": 1700,
+      "summary": "An observability platform from the Pydantic team that provides structured logging, tracing, and metrics with minimal setup. Integrates natively with FastAPI, Django, and asyncio."
+    }
+  ],
+  "monthly": [
+    {
+      "name": "oven-sh/bun",
+      "url": "https://github.com/oven-sh/bun",
+      "description": "Incredibly fast JavaScript runtime, bundler, test runner, and package manager",
+      "language": "Zig",
+      "stars": 77500,
+      "stars_this_period": 4200,
+      "summary": "Bun continues trending after the 1.2 release which brought full Node.js compatibility for 99% of npm packages, Windows ARM64 support, and a built-in S3 client."
+    },
+    {
+      "name": "biomejs/biome",
+      "url": "https://github.com/biomejs/biome",
+      "description": "A toolchain for web projects, aimed to provide functionalities to maintain them",
+      "language": "Rust",
+      "stars": 17900,
+      "stars_this_period": 2400,
+      "summary": "Rust-based web toolchain providing formatting and linting for JavaScript, TypeScript, JSON, CSS, and GraphQL. Trending after the 2.0 release added CSS linting and a migration CLI."
+    }
+  ]
+}

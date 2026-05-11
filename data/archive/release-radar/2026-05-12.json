@@ -1,0 +1,50 @@
+{
+  "updated_at": "2026-05-12T00:00:00Z",
+  "categories": [
+    {
+      "name": "Node.js",
+      "icon": "nodejs",
+      "category": "Runtimes",
+      "releases": [
+        {
+          "version": "22.15.0",
+          "date": "2026-05-10",
+          "summary": "New permission model API and improved ESM loader performance",
+          "details": "- Permission Model API: New process.permission.has() method for runtime permission checks\n- ESM Loader: 35% faster module resolution for deep dependency trees\n- V8 13.1: Updated V8 engine with improved JIT compilation"
+        },
+        {
+          "version": "22.14.0",
+          "date": "2026-04-28",
+          "summary": "SQLite improvements and new diagnostics channel hooks",
+          "details": "- node:sqlite: Added WAL mode support and prepared statement caching\n- Diagnostics Channel: New http.client.request.created and http.server.response.created hooks\n- Sea: Single executable applications now support embedding multiple assets"
+        }
+      ]
+    },
+    {
+      "name": "React",
+      "icon": "react",
+      "category": "Frontend",
+      "releases": [
+        {
+          "version": "19.1.0",
+          "date": "2026-05-08",
+          "summary": "React Compiler stable release and Activity API",
+          "details": "- React Compiler: Now stable and included by default with automatic memoization\n- Activity API: New Activity component for offscreen rendering with state preservation\n- useFormStatus: Enhanced with pending, data, method, and action properties"
+        }
+      ]
+    },
+    {
+      "name": "Go",
+      "icon": "go",
+      "category": "Runtimes",
+      "releases": [
+        {
+          "version": "1.24.3",
+          "date": "2026-05-06",
+          "summary": "Generic type inference improvements and new iter package",
+          "details": "- Generic Type Inference: Compiler now infers type parameters from return types\n- iter package: New standard library package with Seq, Seq2, Pull, and Pull2\n- go vet: New appends analyzer warns about append calls that don't use their return value"
+        }
+      ]
+    }
+  ]
+}

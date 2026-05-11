@@ -49,9 +49,17 @@ function getDomain(url: string): string {
     <div class="mb-8">
       <h1 class="text-3xl font-bold text-slate-100 mb-2">📰 HN Daily Digest</h1>
       <p class="text-slate-400 text-lg">Top Hacker News stories, summarized</p>
-      {data.date && (
-        <p class="text-sm text-slate-500 mt-2">{formatDate(data.date)}</p>
-      )}
+      <div class="flex items-center gap-3 mt-2">
+        {data.date && (
+          <p class="text-sm text-slate-500">{formatDate(data.date)}</p>
+        )}
+        <a
+          href="/archive#hn-digest"
+          class="text-xs text-slate-500 hover:text-emerald-400 border border-slate-700 hover:border-emerald-400/50 rounded px-2 py-0.5 transition-colors"
+        >
+          Browse archive
+        </a>
+      </div>
     </div>
 
     {data.stories.length === 0 && (
