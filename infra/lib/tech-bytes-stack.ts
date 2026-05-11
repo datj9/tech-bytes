@@ -368,35 +368,8 @@ function handler(event) {
       durationAlarm.addAlarmAction(snsAction);
     }
 
-    // ---------------------------------------------------------------
-    // 14. CloudFront 5xx error rate alarm
-    // ---------------------------------------------------------------
-    const cloudFront5xxAlarm = new cloudwatch.Alarm(
-      this,
-      'CloudFront5xxAlarm',
-      {
-        alarmName: 'tech-bytes-cloudfront-5xx',
-        alarmDescription:
-          'CloudFront 5xx error rate >= 5% over 5 minutes',
-        metric: new cloudwatch.Metric({
-          namespace: 'AWS/CloudFront',
-          metricName: '5xxErrorRate',
-          dimensionsMap: {
-            DistributionId: distribution.distributionId,
-            Region: 'Global',
-          },
-          period: cdk.Duration.minutes(5),
-          statistic: 'Average',
-          region: 'us-east-1',
-        }),
-        threshold: 5,
-        evaluationPeriods: 1,
-        comparisonOperator:
-          cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
-        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
-      },
-    );
-    cloudFront5xxAlarm.addAlarmAction(snsAction);
+    // Note: CloudFront 5xx alarm omitted — CF metrics live in us-east-1
+    // and cross-region alarms are not supported. Monitor via the dashboard.
 
     // ---------------------------------------------------------------
     // 15. AWS Budget ($10/month with 80% and 100% notifications)
