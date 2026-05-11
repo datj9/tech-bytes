@@ -1,0 +1,64 @@
+---
+import '../styles/global.css';
+
+interface Props {
+  title: string;
+}
+
+const { title } = Astro.props;
+const currentPath = Astro.url.pathname;
+
+const navLinks = [
+  { href: '/', label: 'Release Radar', icon: '📦' },
+  { href: '/hn-digest', label: 'HN Digest', icon: '📰' },
+  { href: '/trending', label: 'Trending', icon: '🔥' },
+];
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" href="/favicon.ico" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="generator" content={Astro.generator} />
+    <title>{title} | Tech Bytes</title>
+  </head>
+  <body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col font-sans antialiased">
+    <header class="border-b border-slate-800 sticky top-0 bg-slate-900/95 backdrop-blur-sm z-50">
+      <div class="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
+        <a href="/" class="flex items-center gap-2 text-xl font-bold text-emerald-400 hover:text-emerald-300 transition-colors">
+          <span class="text-2xl">⚡</span>
+          <span>Tech Bytes</span>
+        </a>
+        <nav class="flex items-center gap-1 sm:gap-2">
+          {navLinks.map((link) => (
+            <a
+              href={link.href}
+              class:list={[
+                'px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+                currentPath === link.href || (link.href !== '/' && currentPath.startsWith(link.href))
+                  ? 'bg-slate-800 text-emerald-400'
+                  : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/50',
+              ]}
+            >
+              <span class="hidden sm:inline me-1">{link.icon}</span>
+              {link.label}
+            </a>
+          ))}
+        </nav>
+      </div>
+    </header>
+
+    <main class="flex-1 max-w-5xl mx-auto w-full px-4 py-8">
+      <slot />
+    </main>
+
+    <footer class="border-t border-slate-800 mt-auto">
+      <div class="max-w-5xl mx-auto px-4 py-6 text-center text-sm text-slate-500">
+        <p>Updated daily via LLM</p>
+        <p class="mt-1 text-slate-600">bytes.finaldivision.com</p>
+      </div>
+    </footer>
+  </body>
+</html>
