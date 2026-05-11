@@ -1,0 +1,103 @@
+---
+import Base from '../layouts/Base.astro';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+interface Release {
+  version: string;
+  date: string;
+  summary: string;
+  details: string;
+}
+
+interface Category {
+  name: string;
+  icon: string;
+  releases: Release[];
+}
+
+interface ReleaseData {
+  updated_at: string;
+  categories: Category[];
+}
+
+let data: ReleaseData = { updated_at: '', categories: [] };
+
+try {
+  const dataPath = resolve(process.cwd(), '..', 'data', 'release-radar.json');
+  data = JSON.parse(readFileSync(dataPath, 'utf-8'));
+} catch {
+  // data file not found — use empty defaults
+}
+
+const categoryIcons: Record<string, string> = {
+  nodejs: '🟢',
+  react: '⚛️',
+  go: '🐹',
+  python: '🐍',
+  rust: '🦀',
+  typescript: '🔷',
+  deno: '🦕',
+  bun: '🍞',
+};
+
+function formatDate(dateStr: string): string {
+  return new Date(dateStr).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+---
+
+<Base title="Release Radar">
+  <div class="mb-8">
+    <h1 class="text-3xl font-bold text-slate-100 mb-2">📦 Release Radar</h1>
+    <p class="text-slate-400 text-lg">Latest version updates across frameworks, runtimes, and languages</p>
+    {data.updated_at && (
+      <p class="text-sm text-slate-500 mt-2">
+        Last updated: {formatDate(data.updated_at)}
+      </p>
+    )}
+  </div>
+
+  {data.categories.length === 0 && (
+    <div class="text-center py-16 text-slate-500">
+      <p class="text-4xl mb-4">📦</p>
+      <p class="text-lg">No release data available yet.</p>
+      <p class="text-sm mt-2">Data will appear once the release radar pipeline runs.</p>
+    </div>
+  )}
+
+  <div class="space-y-8">
+    {data.categories.map((category) => (
+      <section class="border border-slate-800 rounded-xl overflow-hidden">
+        <div class="bg-slate-800/50 px-6 py-4 flex items-center gap-3">
+          <span class="text-2xl">{categoryIcons[category.icon] ?? '📋'}</span>
+          <h2 class="text-xl font-semibold text-slate-100">{category.name}</h2>
+          <span class="ms-auto text-sm text-slate-500">
+            {category.releases.length} release{category.releases.length !== 1 ? 's' : ''}
+          </span>
+        </div>
+
+        <div class="divide-y divide-slate-800">
+          {category.releases.map((release) => (
+            <details class="group">
+              <summary class="px-6 py-4 cursor-pointer hover:bg-slate-800/30 transition-colors flex items-center gap-4 list-none [&::-webkit-details-marker]:hidden">
+                <span class="text-emerald-400 font-mono font-bold text-lg">{release.version}</span>
+                <span class="text-slate-400 text-sm">{formatDate(release.date)}</span>
+                <span class="ms-auto text-slate-500 group-open:rotate-90 transition-transform">▶</span>
+              </summary>
+              <div class="px-6 pb-4">
+                <p class="text-slate-300 mb-4">{release.summary}</p>
+                <div class="bg-slate-800/50 rounded-lg p-4 text-sm text-slate-300 leading-relaxed whitespace-pre-line border border-slate-700/50">
+                  {release.details}
+                </div>
+              </div>
+            </details>
+          ))}
+        </div>
+      </section>
+    ))}
+  </div>
+</Base>

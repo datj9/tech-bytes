@@ -1,0 +1,31 @@
+name: Preview (Build Check)
+
+on:
+  pull_request:
+    branches: [master]
+
+jobs:
+  build-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install and build site
+        working-directory: site
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm run build
+
+      - name: Install infra and validate
+        working-directory: infra
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm exec cdk synth --quiet

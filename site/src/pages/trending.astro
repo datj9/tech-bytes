@@ -1,0 +1,185 @@
+---
+import Base from '../layouts/Base.astro';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+interface Repo {
+  name: string;
+  url: string;
+  description: string;
+  language: string;
+  stars: number;
+  stars_this_period: number;
+  summary: string;
+}
+
+interface TrendingData {
+  updated_at: string;
+  weekly: Repo[];
+  monthly: Repo[];
+}
+
+let data: TrendingData = { updated_at: '', weekly: [], monthly: [] };
+
+try {
+  const dataPath = resolve(process.cwd(), '..', 'data', 'gh-trending.json');
+  data = JSON.parse(readFileSync(dataPath, 'utf-8'));
+} catch {
+  // data file not found — use empty defaults
+}
+
+const languageColors: Record<string, string> = {
+  TypeScript: 'bg-blue-500',
+  JavaScript: 'bg-yellow-500',
+  Python: 'bg-green-500',
+  Rust: 'bg-orange-600',
+  Go: 'bg-cyan-500',
+  Zig: 'bg-amber-500',
+  Java: 'bg-red-500',
+  Ruby: 'bg-red-600',
+  Swift: 'bg-orange-500',
+  Kotlin: 'bg-purple-500',
+  'C++': 'bg-pink-500',
+  C: 'bg-slate-400',
+};
+
+function formatStars(stars: number): string {
+  if (stars >= 1000) {
+    return `${(stars / 1000).toFixed(1)}k`;
+  }
+  return stars.toString();
+}
+
+function formatDate(dateStr: string): string {
+  return new Date(dateStr).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+---
+
+<Base title="Trending">
+  <div class="mb-8">
+    <h1 class="text-3xl font-bold text-slate-100 mb-2">🔥 Trending This Week</h1>
+    <p class="text-slate-400 text-lg">Hot repositories on GitHub, summarized</p>
+    {data.updated_at && (
+      <p class="text-sm text-slate-500 mt-2">
+        Last updated: {formatDate(data.updated_at)}
+      </p>
+    )}
+  </div>
+
+  {data.weekly.length === 0 && data.monthly.length === 0 && (
+    <div class="text-center py-16 text-slate-500">
+      <p class="text-4xl mb-4">🔥</p>
+      <p class="text-lg">No trending data available yet.</p>
+      <p class="text-sm mt-2">Data will appear once the trending pipeline runs.</p>
+    </div>
+  )}
+
+  <div x-data="{ tab: 'week' }">
+    <div class="flex gap-2 mb-6">
+      <button
+        x-on:click="tab = 'week'"
+        x-bind:class="tab === 'week' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50' : 'bg-slate-800/50 text-slate-400 border-slate-700 hover:border-slate-600 hover:text-slate-300'"
+        class="px-4 py-2 rounded-lg text-sm font-medium border transition-colors"
+      >
+        This Week
+      </button>
+      <button
+        x-on:click="tab = 'month'"
+        x-bind:class="tab === 'month' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50' : 'bg-slate-800/50 text-slate-400 border-slate-700 hover:border-slate-600 hover:text-slate-300'"
+        class="px-4 py-2 rounded-lg text-sm font-medium border transition-colors"
+      >
+        This Month
+      </button>
+    </div>
+
+    <div x-show="tab === 'week'" class="space-y-4">
+      {data.weekly.map((repo) => (
+        <article class="border border-slate-800 rounded-xl p-6 hover:border-slate-700 transition-colors">
+          <div class="flex items-start justify-between gap-4 mb-3">
+            <div class="min-w-0">
+              <h2 class="text-lg font-semibold">
+                <a
+                  href={repo.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="text-slate-100 hover:text-emerald-400 transition-colors"
+                >
+                  {repo.name}
+                </a>
+              </h2>
+              <p class="text-sm text-slate-500 mt-0.5">{repo.description}</p>
+            </div>
+            <div class="flex flex-col items-end gap-1 shrink-0">
+              <span class="text-slate-300 font-mono text-sm flex items-center gap-1">
+                ⭐ {formatStars(repo.stars)}
+              </span>
+              <span class="text-emerald-400 text-xs font-medium">
+                +{formatStars(repo.stars_this_period)} this week
+              </span>
+            </div>
+          </div>
+          <div class="flex items-center gap-3 mb-3">
+            {repo.language && (
+              <span class="flex items-center gap-1.5 text-sm text-slate-400">
+                <span class={`inline-block w-3 h-3 rounded-full ${languageColors[repo.language] ?? 'bg-slate-500'}`}></span>
+                {repo.language}
+              </span>
+            )}
+          </div>
+          <p class="text-slate-300 text-sm leading-relaxed">{repo.summary}</p>
+        </article>
+      ))}
+    </div>
+
+    <div x-show="tab === 'month'" x-cloak class="space-y-4">
+      {data.monthly.map((repo) => (
+        <article class="border border-slate-800 rounded-xl p-6 hover:border-slate-700 transition-colors">
+          <div class="flex items-start justify-between gap-4 mb-3">
+            <div class="min-w-0">
+              <h2 class="text-lg font-semibold">
+                <a
+                  href={repo.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="text-slate-100 hover:text-emerald-400 transition-colors"
+                >
+                  {repo.name}
+                </a>
+              </h2>
+              <p class="text-sm text-slate-500 mt-0.5">{repo.description}</p>
+            </div>
+            <div class="flex flex-col items-end gap-1 shrink-0">
+              <span class="text-slate-300 font-mono text-sm flex items-center gap-1">
+                ⭐ {formatStars(repo.stars)}
+              </span>
+              <span class="text-emerald-400 text-xs font-medium">
+                +{formatStars(repo.stars_this_period)} this month
+              </span>
+            </div>
+          </div>
+          <div class="flex items-center gap-3 mb-3">
+            {repo.language && (
+              <span class="flex items-center gap-1.5 text-sm text-slate-400">
+                <span class={`inline-block w-3 h-3 rounded-full ${languageColors[repo.language] ?? 'bg-slate-500'}`}></span>
+                {repo.language}
+              </span>
+            )}
+          </div>
+          <p class="text-slate-300 text-sm leading-relaxed">{repo.summary}</p>
+        </article>
+      ))}
+    </div>
+  </div>
+</Base>
+
+<script is:inline src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+
+<style is:global>
+  [x-cloak] {
+    display: none !important;
+  }
+</style>
