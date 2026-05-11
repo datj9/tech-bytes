@@ -9,10 +9,10 @@ from typing import Any
 import requests
 
 from shared.rebuild import trigger_rebuild
-from shared.utils import summarize, today_str, upload_to_s3
+from shared.utils import emit_metric, setup_logging, summarize, today_str, upload_to_s3
 
+setup_logging()
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
 
 S3_KEY = "hn-digest.json"
 
@@ -132,10 +132,12 @@ def handler(event: Any = None, context: Any = None) -> dict[str, Any]:
 
     # Summarize each story
     results: list[dict[str, Any]] = []
+    openai_calls = 0
     for story in top_stories:
         try:
             entry = _summarize_story(story)
             results.append(entry)
+            openai_calls += 1  # one summarize() call per story
             time.sleep(0.5)  # respect OpenAI rate limits
         except Exception:
             logger.exception("Failed to summarize story: %s", story.get("title", "?"))
@@ -147,18 +149,31 @@ def handler(event: Any = None, context: Any = None) -> dict[str, Any]:
         "stories": results,
     }
 
+    s3_successes = 0
+    s3_failures = 0
+
     try:
         upload_to_s3(output, S3_KEY)
+        s3_successes += 1
     except Exception:
         logger.exception("Failed to upload to S3")
+        s3_failures += 1
 
     try:
         archive_key = f"data/archive/hn-digest/{today_str()}.json"
         upload_to_s3(output, archive_key)
+        s3_successes += 1
     except Exception:
         logger.exception("Failed to upload archive copy to S3")
+        s3_failures += 1
 
     trigger_rebuild()
+
+    # Emit custom metrics
+    emit_metric("StoriesProcessed", len(results))
+    emit_metric("OpenAISummarizations", openai_calls)
+    emit_metric("S3UploadsSucceeded", s3_successes)
+    emit_metric("S3UploadsFailed", s3_failures)
 
     logger.info("HN Digest complete — processed %d stories", len(results))
     return output

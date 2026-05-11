@@ -10,10 +10,10 @@ from typing import Any
 import requests
 
 from shared.rebuild import trigger_rebuild
-from shared.utils import get_github_headers, summarize, today_str, upload_to_s3
+from shared.utils import emit_metric, get_github_headers, setup_logging, summarize, today_str, upload_to_s3
 
+setup_logging()
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
 
 S3_KEY = "gh-trending.json"
 
@@ -145,6 +145,10 @@ def handler(event: Any = None, context: Any = None) -> dict[str, Any]:
     monthly_repos = _search_repos(monthly_date)
     monthly_results = _process_repos(monthly_repos)
 
+    total_repos = len(weekly_results) + len(monthly_results)
+    # Each repo gets one summarize() call in _process_repo
+    openai_calls = total_repos
+
     output = {
         "generated_at": today_str(),
         "source": "github_search",
@@ -158,18 +162,31 @@ def handler(event: Any = None, context: Any = None) -> dict[str, Any]:
         },
     }
 
+    s3_successes = 0
+    s3_failures = 0
+
     try:
         upload_to_s3(output, S3_KEY)
+        s3_successes += 1
     except Exception:
         logger.exception("Failed to upload to S3")
+        s3_failures += 1
 
     try:
         archive_key = f"data/archive/gh-trending/{today_str()}.json"
         upload_to_s3(output, archive_key)
+        s3_successes += 1
     except Exception:
         logger.exception("Failed to upload archive copy to S3")
+        s3_failures += 1
 
     trigger_rebuild()
+
+    # Emit custom metrics
+    emit_metric("ReposProcessed", total_repos)
+    emit_metric("OpenAISummarizations", openai_calls)
+    emit_metric("S3UploadsSucceeded", s3_successes)
+    emit_metric("S3UploadsFailed", s3_failures)
 
     logger.info(
         "GitHub Trending complete — %d weekly, %d monthly repos",

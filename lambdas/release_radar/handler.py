@@ -11,10 +11,10 @@ import requests
 import yaml
 
 from shared.rebuild import trigger_rebuild
-from shared.utils import get_github_headers, summarize, today_str, upload_to_s3
+from shared.utils import emit_metric, get_github_headers, setup_logging, summarize, today_str, upload_to_s3
 
+setup_logging()
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
 
 S3_KEY = "release-radar.json"
 
@@ -142,11 +142,14 @@ def handler(event: Any = None, context: Any = None) -> dict[str, Any]:
         return {"generated_at": today_str(), "source": "github_releases", "technologies": [], "categories": {}}
 
     results: list[dict[str, Any]] = []
+    openai_calls = 0
     for tech in technologies:
         try:
             entry = _process_technology(tech)
             if entry:
                 results.append(entry)
+                # Each release gets 2 OpenAI calls (summary + details)
+                openai_calls += len(entry.get("releases", [])) * 2
             time.sleep(1)  # breathing room between repos
         except Exception:
             logger.exception("Failed to process technology %s", tech["name"])
@@ -165,18 +168,31 @@ def handler(event: Any = None, context: Any = None) -> dict[str, Any]:
         "categories": categories,
     }
 
+    s3_successes = 0
+    s3_failures = 0
+
     try:
         upload_to_s3(output, S3_KEY)
+        s3_successes += 1
     except Exception:
         logger.exception("Failed to upload to S3")
+        s3_failures += 1
 
     try:
         archive_key = f"data/archive/release-radar/{today_str()}.json"
         upload_to_s3(output, archive_key)
+        s3_successes += 1
     except Exception:
         logger.exception("Failed to upload archive copy to S3")
+        s3_failures += 1
 
     trigger_rebuild()
+
+    # Emit custom metrics
+    emit_metric("TechnologiesProcessed", len(results))
+    emit_metric("OpenAISummarizations", openai_calls)
+    emit_metric("S3UploadsSucceeded", s3_successes)
+    emit_metric("S3UploadsFailed", s3_failures)
 
     logger.info("Release Radar complete — processed %d technologies", len(results))
     return output
