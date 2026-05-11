@@ -9,13 +9,19 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as eventsTargets from 'aws-cdk-lib/aws-events-targets';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as ses from 'aws-cdk-lib/aws-ses';
+import * as ssm from 'aws-cdk-lib/aws-ssm';
 import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
+import * as budgets from 'aws-cdk-lib/aws-budgets';
 import { Construct } from 'constructs';
 
 const DOMAIN_NAME = 'bytes.finaldivision.com';
 const HOSTED_ZONE_NAME = 'finaldivision.com';
 
-const LAMBDA_NAMES = ['release_radar', 'hn_digest', 'gh_trending'] as const;
+const LAMBDA_NAMES = ['release_radar', 'hn_digest', 'gh_trending', 'email_digest'] as const;
 
 export class TechBytesStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -120,6 +126,24 @@ function handler(event) {
     });
 
     // ---------------------------------------------------------------
+    // 6b. SES Domain Identity (verified via Route53 DNS)
+    // ---------------------------------------------------------------
+    const sesIdentity = new ses.EmailIdentity(this, 'SesDomainIdentity', {
+      identity: ses.Identity.publicHostedZone(hostedZone),
+      mailFromDomain: `mail.${DOMAIN_NAME}`,
+    });
+
+    // ---------------------------------------------------------------
+    // 6c. SSM Parameter for email subscribers (comma-separated)
+    // ---------------------------------------------------------------
+    const SUBSCRIBERS_PARAM = '/tech-bytes/subscribers';
+    new ssm.StringParameter(this, 'SubscribersParam', {
+      parameterName: SUBSCRIBERS_PARAM,
+      stringValue: 'placeholder@example.com',
+      description: 'Comma-separated list of Tech Bytes Weekly digest subscribers',
+    });
+
+    // ---------------------------------------------------------------
     // 7. Lambda Functions (Python 3.12)
     // ---------------------------------------------------------------
 
@@ -166,6 +190,17 @@ function handler(event) {
         }),
       );
 
+      // Grant permission to publish custom CloudWatch metrics
+      fn.addToRolePolicy(
+        new iam.PolicyStatement({
+          actions: ['cloudwatch:PutMetricData'],
+          resources: ['*'],
+          conditions: {
+            StringEquals: { 'cloudwatch:namespace': 'TechBytes' },
+          },
+        }),
+      );
+
       return { name, fn };
     });
 
@@ -176,6 +211,7 @@ function handler(event) {
       release_radar: events.Schedule.expression('cron(0 6 * * ? *)'),
       hn_digest: events.Schedule.expression('cron(0 8 * * ? *)'),
       gh_trending: events.Schedule.expression('cron(0 7 ? * MON *)'),
+      email_digest: events.Schedule.expression('cron(0 9 ? * FRI *)'),
     };
 
     for (const { name, fn } of lambdaFunctions) {
@@ -184,6 +220,35 @@ function handler(event) {
         targets: [new eventsTargets.LambdaFunction(fn)],
         description: `Scheduled trigger for ${name}`,
       });
+    }
+
+    // ---------------------------------------------------------------
+    // 8b. Email Digest — additional permissions (S3 read, SES send, subscribers SSM)
+    // ---------------------------------------------------------------
+    const emailDigestEntry = lambdaFunctions.find(({ name }) => name === 'email_digest');
+    if (emailDigestEntry) {
+      const digestFn = emailDigestEntry.fn;
+
+      // Grant read access to data/ prefix for reading latest JSON
+      siteBucket.grantRead(digestFn, 'data/*');
+
+      // Grant SES send permission
+      digestFn.addToRolePolicy(
+        new iam.PolicyStatement({
+          actions: ['ses:SendEmail', 'ses:SendRawEmail'],
+          resources: ['*'],
+        }),
+      );
+
+      // Grant read access to subscribers SSM parameter
+      digestFn.addToRolePolicy(
+        new iam.PolicyStatement({
+          actions: ['ssm:GetParameter'],
+          resources: [
+            `arn:aws:ssm:${this.region}:${this.account}:parameter${SUBSCRIBERS_PARAM}`,
+          ],
+        }),
+      );
     }
 
     // ---------------------------------------------------------------
@@ -224,6 +289,327 @@ function handler(event) {
     });
 
     // ---------------------------------------------------------------
+    // 11. SNS Topic for alerts
+    // ---------------------------------------------------------------
+    const alertsTopic = new sns.Topic(this, 'AlertsTopic', {
+      topicName: 'TechBytesAlerts',
+      displayName: 'Tech Bytes Alerts',
+    });
+
+    const alertEmailParam = new cdk.CfnParameter(this, 'AlertEmail', {
+      type: 'String',
+      default: '',
+      description:
+        'Email address for alert notifications. Leave empty to skip subscription (subscribe manually via AWS Console).',
+    });
+
+    const emailCondition = new cdk.CfnCondition(this, 'HasAlertEmail', {
+      expression: cdk.Fn.conditionNot(
+        cdk.Fn.conditionEquals(alertEmailParam.valueAsString, ''),
+      ),
+    });
+
+    const emailSubscription = new sns.CfnSubscription(
+      this,
+      'AlertEmailSubscription',
+      {
+        topicArn: alertsTopic.topicArn,
+        protocol: 'email',
+        endpoint: alertEmailParam.valueAsString,
+      },
+    );
+    emailSubscription.cfnOptions.condition = emailCondition;
+
+    // ---------------------------------------------------------------
+    // 12. Lambda error alarms
+    // ---------------------------------------------------------------
+    const snsAction = new cloudwatchActions.SnsAction(alertsTopic);
+
+    for (const { name, fn } of lambdaFunctions) {
+      const errorAlarm = new cloudwatch.Alarm(
+        this,
+        `${pascalCase(name)}ErrorAlarm`,
+        {
+          alarmName: `${name}-errors`,
+          alarmDescription: `Lambda ${name} error count >= 1 in 1 hour`,
+          metric: fn.metricErrors({
+            period: cdk.Duration.hours(1),
+            statistic: 'Sum',
+          }),
+          threshold: 1,
+          evaluationPeriods: 1,
+          comparisonOperator:
+            cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+          treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+        },
+      );
+      errorAlarm.addAlarmAction(snsAction);
+
+      // ---------------------------------------------------------------
+      // 13. Lambda duration alarms
+      // ---------------------------------------------------------------
+      const durationAlarm = new cloudwatch.Alarm(
+        this,
+        `${pascalCase(name)}DurationAlarm`,
+        {
+          alarmName: `${name}-duration`,
+          alarmDescription: `Lambda ${name} max duration >= 4 min (close to 5 min timeout)`,
+          metric: fn.metricDuration({
+            period: cdk.Duration.hours(1),
+            statistic: 'Maximum',
+          }),
+          threshold: 240_000,
+          evaluationPeriods: 1,
+          comparisonOperator:
+            cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+          treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+        },
+      );
+      durationAlarm.addAlarmAction(snsAction);
+    }
+
+    // ---------------------------------------------------------------
+    // 14. CloudFront 5xx error rate alarm
+    // ---------------------------------------------------------------
+    const cloudFront5xxAlarm = new cloudwatch.Alarm(
+      this,
+      'CloudFront5xxAlarm',
+      {
+        alarmName: 'tech-bytes-cloudfront-5xx',
+        alarmDescription:
+          'CloudFront 5xx error rate >= 5% over 5 minutes',
+        metric: new cloudwatch.Metric({
+          namespace: 'AWS/CloudFront',
+          metricName: '5xxErrorRate',
+          dimensionsMap: {
+            DistributionId: distribution.distributionId,
+            Region: 'Global',
+          },
+          period: cdk.Duration.minutes(5),
+          statistic: 'Average',
+          region: 'us-east-1',
+        }),
+        threshold: 5,
+        evaluationPeriods: 1,
+        comparisonOperator:
+          cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      },
+    );
+    cloudFront5xxAlarm.addAlarmAction(snsAction);
+
+    // ---------------------------------------------------------------
+    // 15. AWS Budget ($10/month with 80% and 100% notifications)
+    // ---------------------------------------------------------------
+    new budgets.CfnBudget(this, 'MonthlyBudget', {
+      budget: {
+        budgetName: 'TechBytesMonthlyBudget',
+        budgetType: 'COST',
+        timeUnit: 'MONTHLY',
+        budgetLimit: {
+          amount: 10,
+          unit: 'USD',
+        },
+      },
+      notificationsWithSubscribers: [
+        {
+          notification: {
+            notificationType: 'ACTUAL',
+            comparisonOperator: 'GREATER_THAN',
+            threshold: 80,
+            thresholdType: 'PERCENTAGE',
+          },
+          subscribers: [
+            {
+              subscriptionType: 'SNS',
+              address: alertsTopic.topicArn,
+            },
+          ],
+        },
+        {
+          notification: {
+            notificationType: 'ACTUAL',
+            comparisonOperator: 'GREATER_THAN',
+            threshold: 100,
+            thresholdType: 'PERCENTAGE',
+          },
+          subscribers: [
+            {
+              subscriptionType: 'SNS',
+              address: alertsTopic.topicArn,
+            },
+          ],
+        },
+      ],
+    });
+
+    // Grant AWS Budgets permission to publish to the SNS topic
+    alertsTopic.addToResourcePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        principals: [new iam.ServicePrincipal('budgets.amazonaws.com')],
+        actions: ['sns:Publish'],
+        resources: [alertsTopic.topicArn],
+      }),
+    );
+
+    // ---------------------------------------------------------------
+    // 16. CloudWatch Dashboard
+    // ---------------------------------------------------------------
+    const METRIC_NAMESPACE = 'TechBytes';
+    const dashboard = new cloudwatch.Dashboard(this, 'MonitoringDashboard', {
+      dashboardName: 'TechBytes-Monitoring',
+    });
+
+    // --- Row 1: Lambda Invocations & Errors ---
+    dashboard.addWidgets(
+      ...lambdaFunctions.map(({ name, fn }) =>
+        new cloudwatch.GraphWidget({
+          title: `${pascalCase(name)} — Invocations & Errors`,
+          width: 6,
+          left: [
+            fn.metricInvocations({ statistic: 'Sum', period: cdk.Duration.hours(1) }),
+            fn.metricErrors({ statistic: 'Sum', period: cdk.Duration.hours(1) }),
+            fn.metricThrottles({ statistic: 'Sum', period: cdk.Duration.hours(1) }),
+          ],
+        }),
+      ),
+    );
+
+    // --- Row 2: Lambda Duration ---
+    dashboard.addWidgets(
+      ...lambdaFunctions.map(({ name, fn }) =>
+        new cloudwatch.GraphWidget({
+          title: `${pascalCase(name)} — Duration`,
+          width: 6,
+          left: [
+            fn.metricDuration({ statistic: 'Average', period: cdk.Duration.hours(1) }),
+            fn.metricDuration({ statistic: 'Maximum', period: cdk.Duration.hours(1) }),
+          ],
+        }),
+      ),
+    );
+
+    // --- Row 3: Custom Metrics ---
+    const customMetric = (metricName: string, label?: string): cloudwatch.Metric =>
+      new cloudwatch.Metric({
+        namespace: METRIC_NAMESPACE,
+        metricName,
+        statistic: 'Sum',
+        period: cdk.Duration.days(1),
+        label: label ?? metricName,
+      });
+
+    dashboard.addWidgets(
+      new cloudwatch.SingleValueWidget({
+        title: 'Items Processed (24h)',
+        width: 8,
+        metrics: [
+          customMetric('StoriesProcessed', 'HN Stories'),
+          customMetric('TechnologiesProcessed', 'Technologies'),
+          customMetric('ReposProcessed', 'Repos'),
+        ],
+      }),
+      new cloudwatch.SingleValueWidget({
+        title: 'OpenAI API Calls (24h)',
+        width: 8,
+        metrics: [customMetric('OpenAISummarizations')],
+      }),
+      new cloudwatch.SingleValueWidget({
+        title: 'S3 Uploads (24h)',
+        width: 8,
+        metrics: [
+          customMetric('S3UploadsSucceeded', 'Succeeded'),
+          customMetric('S3UploadsFailed', 'Failed'),
+        ],
+      }),
+    );
+
+    // --- Row 4: CloudFront ---
+    dashboard.addWidgets(
+      new cloudwatch.GraphWidget({
+        title: 'CloudFront — Requests & Bytes',
+        width: 12,
+        left: [
+          new cloudwatch.Metric({
+            namespace: 'AWS/CloudFront',
+            metricName: 'Requests',
+            dimensionsMap: { DistributionId: distribution.distributionId, Region: 'Global' },
+            statistic: 'Sum',
+            period: cdk.Duration.hours(1),
+            region: 'us-east-1',
+          }),
+          new cloudwatch.Metric({
+            namespace: 'AWS/CloudFront',
+            metricName: 'BytesDownloaded',
+            dimensionsMap: { DistributionId: distribution.distributionId, Region: 'Global' },
+            statistic: 'Sum',
+            period: cdk.Duration.hours(1),
+            region: 'us-east-1',
+          }),
+        ],
+      }),
+      new cloudwatch.GraphWidget({
+        title: 'CloudFront — Error Rates',
+        width: 12,
+        left: [
+          new cloudwatch.Metric({
+            namespace: 'AWS/CloudFront',
+            metricName: '4xxErrorRate',
+            dimensionsMap: { DistributionId: distribution.distributionId, Region: 'Global' },
+            statistic: 'Average',
+            period: cdk.Duration.hours(1),
+            region: 'us-east-1',
+          }),
+          new cloudwatch.Metric({
+            namespace: 'AWS/CloudFront',
+            metricName: '5xxErrorRate',
+            dimensionsMap: { DistributionId: distribution.distributionId, Region: 'Global' },
+            statistic: 'Average',
+            period: cdk.Duration.hours(1),
+            region: 'us-east-1',
+          }),
+        ],
+      }),
+    );
+
+    // --- Row 5: S3 Bucket ---
+    dashboard.addWidgets(
+      new cloudwatch.SingleValueWidget({
+        title: 'S3 — Bucket Size',
+        width: 12,
+        metrics: [
+          new cloudwatch.Metric({
+            namespace: 'AWS/S3',
+            metricName: 'BucketSizeBytes',
+            dimensionsMap: {
+              BucketName: siteBucket.bucketName,
+              StorageType: 'StandardStorage',
+            },
+            statistic: 'Average',
+            period: cdk.Duration.days(1),
+          }),
+        ],
+      }),
+      new cloudwatch.SingleValueWidget({
+        title: 'S3 — Number of Objects',
+        width: 12,
+        metrics: [
+          new cloudwatch.Metric({
+            namespace: 'AWS/S3',
+            metricName: 'NumberOfObjects',
+            dimensionsMap: {
+              BucketName: siteBucket.bucketName,
+              StorageType: 'AllStorageTypes',
+            },
+            statistic: 'Average',
+            period: cdk.Duration.days(1),
+          }),
+        ],
+      }),
+    );
+
+    // ---------------------------------------------------------------
     // Outputs
     // ---------------------------------------------------------------
     new cdk.CfnOutput(this, 'SiteUrl', {
@@ -241,6 +627,12 @@ function handler(event) {
     new cdk.CfnOutput(this, 'GitHubActionsRoleArn', {
       value: deployRole.roleArn,
       description: 'Set this as AWS_ROLE_ARN secret in GitHub repo',
+    });
+
+    new cdk.CfnOutput(this, 'AlertsTopicArn', {
+      value: alertsTopic.topicArn,
+      description:
+        'SNS topic ARN for alerts. Subscribe via: aws sns subscribe --topic-arn <arn> --protocol email --notification-endpoint your@email.com',
     });
   }
 }

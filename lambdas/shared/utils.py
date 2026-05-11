@@ -11,6 +11,68 @@ from openai import OpenAI
 
 logger = logging.getLogger(__name__)
 
+
+# ---------------------------------------------------------------------------
+# Structured JSON logging
+# ---------------------------------------------------------------------------
+
+class JsonFormatter(logging.Formatter):
+    """Format log records as single-line JSON for CloudWatch ingestion."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        log_record = {
+            "timestamp": self.formatTime(record),
+            "level": record.levelname,
+            "logger": record.name,
+            "message": record.getMessage(),
+            "function": record.funcName,
+        }
+        if record.exc_info:
+            log_record["exception"] = self.formatException(record.exc_info)
+        return json.dumps(log_record)
+
+
+def setup_logging() -> None:
+    """Configure the root logger with JSON formatting for Lambda / CloudWatch."""
+    handler = logging.StreamHandler()
+    handler.setFormatter(JsonFormatter())
+    root = logging.getLogger()
+    root.handlers = [handler]
+    root.setLevel(logging.INFO)
+
+
+# ---------------------------------------------------------------------------
+# Custom CloudWatch metrics
+# ---------------------------------------------------------------------------
+
+_cloudwatch_client = None
+
+METRIC_NAMESPACE = "TechBytes"
+
+
+def _get_cloudwatch_client():
+    global _cloudwatch_client
+    if _cloudwatch_client is None:
+        _cloudwatch_client = boto3.client("cloudwatch")
+    return _cloudwatch_client
+
+
+def emit_metric(name: str, value: float, unit: str = "Count") -> None:
+    """Publish a custom metric to CloudWatch under the TechBytes namespace."""
+    try:
+        _get_cloudwatch_client().put_metric_data(
+            Namespace=METRIC_NAMESPACE,
+            MetricData=[
+                {
+                    "MetricName": name,
+                    "Value": value,
+                    "Unit": unit,
+                },
+            ],
+        )
+    except Exception:
+        logger.warning("Failed to emit metric %s=%s", name, value, exc_info=True)
+
 MODEL = "gpt-4o-mini"
 
 _ssm_client = None
