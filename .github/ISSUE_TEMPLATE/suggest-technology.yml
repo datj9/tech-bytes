@@ -1,0 +1,44 @@
+name: Suggest a Technology
+description: Suggest a new framework, runtime, or tool to track on Tech Bytes
+title: "[Suggest] "
+labels: ["suggestion", "technology"]
+body:
+  - type: input
+    id: name
+    attributes:
+      label: Technology Name
+      description: e.g., "Remix", "Zig", "Bun"
+      placeholder: Technology name
+    validations:
+      required: true
+  - type: input
+    id: repo
+    attributes:
+      label: GitHub Repository
+      description: "owner/repo format"
+      placeholder: "e.g., remix-run/remix"
+    validations:
+      required: true
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      options:
+        - Runtimes
+        - Frontend
+        - Meta-Frameworks
+        - Languages
+        - CSS
+        - Build Tools
+        - Infrastructure
+        - Databases
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why should we track this?
+      description: Brief explanation of why this technology is interesting
+    validations:
+      required: false

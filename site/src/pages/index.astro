@@ -13,6 +13,7 @@ interface Release {
 interface Category {
   name: string;
   icon: string;
+  category?: string;
   releases: Release[];
 }
 
@@ -31,6 +32,14 @@ try {
 }
 
 const categoryIcons: Record<string, string> = {
+  Runtimes: '🚀',
+  Frontend: '⚛️',
+  'Meta-Frameworks': '📦',
+  Languages: '🔷',
+  CSS: '🎨',
+  'Build Tools': '🔧',
+  Infrastructure: '🏗️',
+  // Legacy icon keys (backward compat)
   nodejs: '🟢',
   react: '⚛️',
   go: '🐹',
@@ -48,56 +57,98 @@ function formatDate(dateStr: string): string {
     year: 'numeric',
   });
 }
+
+// Group categories by their `category` field when present
+type GroupedSection = { label: string; items: Category[] };
+
+function groupByCategory(categories: Category[]): GroupedSection[] {
+  const hasCategory = categories.some((c) => c.category);
+  if (!hasCategory) {
+    // Backward compat: no category field, render flat
+    return [{ label: '', items: categories }];
+  }
+
+  const grouped = new Map<string, Category[]>();
+  for (const cat of categories) {
+    const key = cat.category ?? 'Other';
+    const list = grouped.get(key) ?? [];
+    list.push(cat);
+    grouped.set(key, list);
+  }
+  return Array.from(grouped.entries()).map(([label, items]) => ({ label, items }));
+}
+
+const sections = groupByCategory(data.categories);
 ---
 
 <Base title="Release Radar">
-  <div class="mb-8">
-    <h1 class="text-3xl font-bold text-slate-100 mb-2">📦 Release Radar</h1>
-    <p class="text-slate-400 text-lg">Latest version updates across frameworks, runtimes, and languages</p>
-    {data.updated_at && (
-      <p class="text-sm text-slate-500 mt-2">
-        Last updated: {formatDate(data.updated_at)}
-      </p>
-    )}
-  </div>
-
-  {data.categories.length === 0 && (
-    <div class="text-center py-16 text-slate-500">
-      <p class="text-4xl mb-4">📦</p>
-      <p class="text-lg">No release data available yet.</p>
-      <p class="text-sm mt-2">Data will appear once the release radar pipeline runs.</p>
+  <div data-pagefind-body>
+    <div class="mb-8">
+      <h1 class="text-3xl font-bold text-slate-100 mb-2">📦 Release Radar</h1>
+      <p class="text-slate-400 text-lg">Latest version updates across frameworks, runtimes, and languages</p>
+      {data.updated_at && (
+        <p class="text-sm text-slate-500 mt-2">
+          Last updated: {formatDate(data.updated_at)}
+        </p>
+      )}
     </div>
-  )}
 
-  <div class="space-y-8">
-    {data.categories.map((category) => (
-      <section class="border border-slate-800 rounded-xl overflow-hidden">
-        <div class="bg-slate-800/50 px-6 py-4 flex items-center gap-3">
-          <span class="text-2xl">{categoryIcons[category.icon] ?? '📋'}</span>
-          <h2 class="text-xl font-semibold text-slate-100">{category.name}</h2>
-          <span class="ms-auto text-sm text-slate-500">
-            {category.releases.length} release{category.releases.length !== 1 ? 's' : ''}
-          </span>
-        </div>
+    {data.categories.length === 0 && (
+      <div class="text-center py-16 text-slate-500">
+        <p class="text-4xl mb-4">📦</p>
+        <p class="text-lg">No release data available yet.</p>
+        <p class="text-sm mt-2">Data will appear once the release radar pipeline runs.</p>
+      </div>
+    )}
 
-        <div class="divide-y divide-slate-800">
-          {category.releases.map((release) => (
-            <details class="group">
-              <summary class="px-6 py-4 cursor-pointer hover:bg-slate-800/30 transition-colors flex items-center gap-4 list-none [&::-webkit-details-marker]:hidden">
-                <span class="text-emerald-400 font-mono font-bold text-lg">{release.version}</span>
-                <span class="text-slate-400 text-sm">{formatDate(release.date)}</span>
-                <span class="ms-auto text-slate-500 group-open:rotate-90 transition-transform">▶</span>
-              </summary>
-              <div class="px-6 pb-4">
-                <p class="text-slate-300 mb-4">{release.summary}</p>
-                <div class="bg-slate-800/50 rounded-lg p-4 text-sm text-slate-300 leading-relaxed whitespace-pre-line border border-slate-700/50">
-                  {release.details}
+    <div class="space-y-10">
+      {sections.map((section) => (
+        <div>
+          {section.label && (
+            <div class="flex items-center gap-3 mb-4">
+              <span class="text-2xl">{categoryIcons[section.label] ?? '📋'}</span>
+              <h2 class="text-2xl font-bold text-slate-100">{section.label}</h2>
+            </div>
+          )}
+
+          <div class="space-y-6">
+            {section.items.map((category) => (
+              <section class="border border-slate-800 rounded-xl overflow-hidden">
+                <div class="bg-slate-800/50 px-6 py-4 flex items-center gap-3">
+                  <span class="text-2xl">{categoryIcons[category.icon] ?? categoryIcons[category.name] ?? '📋'}</span>
+                  <h3 class="text-xl font-semibold text-slate-100">{category.name}</h3>
+                  {category.category && (
+                    <span class="text-xs text-slate-500 bg-slate-800 px-2 py-0.5 rounded-full">
+                      {category.category}
+                    </span>
+                  )}
+                  <span class="ms-auto text-sm text-slate-500">
+                    {category.releases.length} release{category.releases.length !== 1 ? 's' : ''}
+                  </span>
                 </div>
-              </div>
-            </details>
-          ))}
+
+                <div class="divide-y divide-slate-800">
+                  {category.releases.map((release) => (
+                    <details class="group">
+                      <summary class="px-6 py-4 cursor-pointer hover:bg-slate-800/30 transition-colors flex items-center gap-4 list-none [&::-webkit-details-marker]:hidden">
+                        <span class="text-emerald-400 font-mono font-bold text-lg">{release.version}</span>
+                        <span class="text-slate-400 text-sm">{formatDate(release.date)}</span>
+                        <span class="ms-auto text-slate-500 group-open:rotate-90 transition-transform">▶</span>
+                      </summary>
+                      <div class="px-6 pb-4">
+                        <p class="text-slate-300 mb-4">{release.summary}</p>
+                        <div class="bg-slate-800/50 rounded-lg p-4 text-sm text-slate-300 leading-relaxed whitespace-pre-line border border-slate-700/50">
+                          {release.details}
+                        </div>
+                      </div>
+                    </details>
+                  ))}
+                </div>
+              </section>
+            ))}
+          </div>
         </div>
-      </section>
-    ))}
+      ))}
+    </div>
   </div>
 </Base>

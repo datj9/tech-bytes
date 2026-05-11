@@ -4,6 +4,7 @@
     {
       "name": "Node.js",
       "icon": "nodejs",
+      "category": "Runtimes",
       "releases": [
         {
           "version": "22.15.0",
@@ -20,8 +21,22 @@
       ]
     },
     {
+      "name": "Deno",
+      "icon": "deno",
+      "category": "Runtimes",
+      "releases": [
+        {
+          "version": "2.3.0",
+          "date": "2026-05-09",
+          "summary": "Improved Node.js compatibility and new deno compile features",
+          "details": "## Highlights\n\n- **Node.js compat**: Added support for `node:cluster` module\n- **deno compile**: Cross-compilation support for all major platforms\n- **LSP**: Faster auto-import suggestions with workspace-wide indexing\n\n## Bug Fixes\n\n- Fixed `fetch()` redirect handling with custom headers\n- Corrected TypeScript 5.7 type narrowing in `deno check`"
+        }
+      ]
+    },
+    {
       "name": "React",
       "icon": "react",
+      "category": "Frontend",
       "releases": [
         {
           "version": "19.1.0",
@@ -38,8 +53,22 @@
       ]
     },
     {
+      "name": "Vue",
+      "icon": "vue",
+      "category": "Frontend",
+      "releases": [
+        {
+          "version": "3.5.4",
+          "date": "2026-05-07",
+          "summary": "Vapor mode improvements and Suspense stabilization",
+          "details": "## Highlights\n\n- **Vapor Mode**: Compiler-driven reactivity without virtual DOM now supports slots and teleport\n- **Suspense**: Promoted from experimental to stable\n- **defineModel**: Added `local` option for two-way binding without parent sync\n\n## Bug Fixes\n\n- Fixed `watch()` deep mode triggering on identical nested references\n- Corrected SSR hydration for `v-show` with transition"
+        }
+      ]
+    },
+    {
       "name": "Go",
       "icon": "go",
+      "category": "Runtimes",
       "releases": [
         {
           "version": "1.24.3",
@@ -52,6 +81,71 @@
           "date": "2026-04-20",
           "summary": "Security patch for crypto/tls and net/http",
           "details": "## Security Fixes\n\n- **CVE-2026-1234**: Fixed TLS session ticket rotation vulnerability in `crypto/tls`\n- **CVE-2026-1235**: Fixed request smuggling via malformed `Transfer-Encoding` headers in `net/http`\n\n## Bug Fixes\n\n- Fixed compiler crash when using generic type aliases with embedded interfaces\n- Corrected race condition in `sync.Pool` cleanup during GC"
+        }
+      ]
+    },
+    {
+      "name": "Next.js",
+      "icon": "nextjs",
+      "category": "Meta-Frameworks",
+      "releases": [
+        {
+          "version": "15.3.0",
+          "date": "2026-05-11",
+          "summary": "Turbopack now default for production builds and new cache API",
+          "details": "## Highlights\n\n- **Turbopack prod**: `next build` now uses Turbopack by default — 40% faster builds\n- **Cache API**: New `unstable_cache` replacement with tag-based revalidation and TTL\n- **Partial Prerendering**: Stable release with automatic static/dynamic splitting\n\n## Breaking Changes\n\n- Minimum Node.js version bumped to 20.x\n- `next/image` default loader now uses AVIF before WebP"
+        }
+      ]
+    },
+    {
+      "name": "TypeScript",
+      "icon": "typescript",
+      "category": "Languages",
+      "releases": [
+        {
+          "version": "5.8.2",
+          "date": "2026-05-04",
+          "summary": "Pattern matching expressions and improved inference for decorators",
+          "details": "## Highlights\n\n- **Pattern Matching**: New `match` expression syntax for exhaustive type narrowing\n- **Decorator Inference**: Generic decorators now correctly infer type parameters\n- **Import Attributes**: Full support for `with { type: 'json' }` syntax\n\n## Performance\n\n- 20% faster type-checking for projects with >5000 files\n- Reduced memory usage for `--watch` mode incremental builds"
+        }
+      ]
+    },
+    {
+      "name": "Tailwind CSS",
+      "icon": "tailwindcss",
+      "category": "CSS",
+      "releases": [
+        {
+          "version": "4.1.0",
+          "date": "2026-05-03",
+          "summary": "New container query utilities and native cascade layers",
+          "details": "## Highlights\n\n- **Container Queries**: `@container` utilities with named container support\n- **Cascade Layers**: All utility classes now wrapped in `@layer utilities`\n- **Color Mix**: New `color-mix()` based opacity modifiers\n\n## Bug Fixes\n\n- Fixed JIT scanning for template literals in `.tsx` files\n- Corrected `dark:` variant specificity in nested group contexts"
+        }
+      ]
+    },
+    {
+      "name": "Vite",
+      "icon": "vite",
+      "category": "Build Tools",
+      "releases": [
+        {
+          "version": "6.2.0",
+          "date": "2026-05-01",
+          "summary": "Environment API stable and new Rolldown backend",
+          "details": "## Highlights\n\n- **Environment API**: Stable release for multi-environment builds (client, SSR, edge)\n- **Rolldown**: Optional Rust-based bundler backend for 3x faster production builds\n- **Module Federation**: Built-in support via `vite-plugin-federation`\n\n## Bug Fixes\n\n- Fixed HMR for CSS modules with composition\n- Corrected source map generation for `worker` imports"
+        }
+      ]
+    },
+    {
+      "name": "Docker",
+      "icon": "docker",
+      "category": "Infrastructure",
+      "releases": [
+        {
+          "version": "27.1.0",
+          "date": "2026-04-30",
+          "summary": "Compose v3 spec and improved multi-platform builds",
+          "details": "## Highlights\n\n- **Compose v3**: New spec with service dependencies, health-check gates, and GPU support\n- **Multi-platform**: `docker buildx build` now parallelizes platform targets by default\n- **Containerd**: Image store integration for deduplication across tags\n\n## Security\n\n- Updated runc to 1.2.5 (CVE-2026-5678 fix)\n- Default seccomp profile now blocks `io_uring` syscalls"
         }
       ]
     }

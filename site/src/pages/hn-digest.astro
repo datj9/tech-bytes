@@ -45,58 +45,60 @@ function getDomain(url: string): string {
 ---
 
 <Base title="HN Digest">
-  <div class="mb-8">
-    <h1 class="text-3xl font-bold text-slate-100 mb-2">📰 HN Daily Digest</h1>
-    <p class="text-slate-400 text-lg">Top Hacker News stories, summarized</p>
-    {data.date && (
-      <p class="text-sm text-slate-500 mt-2">{formatDate(data.date)}</p>
-    )}
-  </div>
-
-  {data.stories.length === 0 && (
-    <div class="text-center py-16 text-slate-500">
-      <p class="text-4xl mb-4">📰</p>
-      <p class="text-lg">No digest available yet.</p>
-      <p class="text-sm mt-2">Data will appear once the HN digest pipeline runs.</p>
+  <div data-pagefind-body>
+    <div class="mb-8">
+      <h1 class="text-3xl font-bold text-slate-100 mb-2">📰 HN Daily Digest</h1>
+      <p class="text-slate-400 text-lg">Top Hacker News stories, summarized</p>
+      {data.date && (
+        <p class="text-sm text-slate-500 mt-2">{formatDate(data.date)}</p>
+      )}
     </div>
-  )}
 
-  <div class="space-y-4">
-    {data.stories.map((story, index) => (
-      <article class="border border-slate-800 rounded-xl p-6 hover:border-slate-700 transition-colors">
-        <div class="flex items-start gap-4">
-          <span class="text-2xl font-bold text-slate-700 min-w-[2rem] text-right">
-            {index + 1}
-          </span>
-          <div class="flex-1 min-w-0">
-            <h2 class="text-lg font-semibold text-slate-100 mb-1">
-              <a
-                href={story.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                class="hover:text-emerald-400 transition-colors"
-              >
-                {story.title}
-              </a>
-            </h2>
-            <div class="flex flex-wrap items-center gap-3 text-sm text-slate-500 mb-3">
-              <span class="text-slate-600">{getDomain(story.url)}</span>
-              <span class="flex items-center gap-1">
-                <span class="text-emerald-500">▲</span> {story.score}
-              </span>
-              <a
-                href={story.hn_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                class="flex items-center gap-1 hover:text-orange-400 transition-colors"
-              >
-                💬 {story.comments} comments
-              </a>
+    {data.stories.length === 0 && (
+      <div class="text-center py-16 text-slate-500">
+        <p class="text-4xl mb-4">📰</p>
+        <p class="text-lg">No digest available yet.</p>
+        <p class="text-sm mt-2">Data will appear once the HN digest pipeline runs.</p>
+      </div>
+    )}
+
+    <div class="space-y-4">
+      {data.stories.map((story, index) => (
+        <article class="border border-slate-800 rounded-xl p-6 hover:border-slate-700 transition-colors">
+          <div class="flex items-start gap-4">
+            <span class="text-2xl font-bold text-slate-700 min-w-[2rem] text-right">
+              {index + 1}
+            </span>
+            <div class="flex-1 min-w-0">
+              <h2 class="text-lg font-semibold text-slate-100 mb-1">
+                <a
+                  href={story.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="hover:text-emerald-400 transition-colors"
+                >
+                  {story.title}
+                </a>
+              </h2>
+              <div class="flex flex-wrap items-center gap-3 text-sm text-slate-500 mb-3">
+                <span class="text-slate-600">{getDomain(story.url)}</span>
+                <span class="flex items-center gap-1">
+                  <span class="text-emerald-500">▲</span> {story.score}
+                </span>
+                <a
+                  href={story.hn_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="flex items-center gap-1 hover:text-orange-400 transition-colors"
+                >
+                  💬 {story.comments} comments
+                </a>
+              </div>
+              <p class="text-slate-300 leading-relaxed">{story.summary}</p>
             </div>
-            <p class="text-slate-300 leading-relaxed">{story.summary}</p>
           </div>
-        </div>
-      </article>
-    ))}
+        </article>
+      ))}
+    </div>
   </div>
 </Base>

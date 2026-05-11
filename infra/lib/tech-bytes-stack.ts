@@ -123,14 +123,17 @@ function handler(event) {
     // 7. Lambda Functions (Python 3.12)
     // ---------------------------------------------------------------
 
-    // Shared bundled asset — installs pip deps and copies source
+    // Shared bundled asset — installs pip deps, copies source + config
     const lambdaCode = lambda.Code.fromAsset('../lambdas', {
       bundling: {
         image: lambda.Runtime.PYTHON_3_12.bundlingImage,
         command: [
           'bash',
           '-c',
-          'pip install -r requirements.txt -t /asset-output && cp -r . /asset-output',
+          'pip install -r requirements.txt -t /asset-output && cp -r . /asset-output && cp -r /asset-input-config /asset-output/config',
+        ],
+        volumes: [
+          { hostPath: `${process.cwd()}/../config`, containerPath: '/asset-input-config' },
         ],
       },
     });
