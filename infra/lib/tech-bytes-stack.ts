@@ -259,6 +259,13 @@ function handler(event) {
       destinationBucket: siteBucket,
       distribution,
       distributionPaths: ['/*'],
+      // prune defaults to true, which deletes every object in the bucket not
+      // present in site/dist — including the entire data/ prefix that the
+      // Lambdas write (release-radar.json, hn-digest.json, gh-trending.json and
+      // their archives). That made every deploy wipe all generated content.
+      // Disable pruning so deploys only add/overwrite the built site and leave
+      // the Lambda-managed data/ prefix intact.
+      prune: false,
     });
 
     // ---------------------------------------------------------------
