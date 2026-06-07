@@ -9,7 +9,8 @@ __pycache__/
 *.pyc
 .venv/
 cdk.out/
-cdk.context.json
+# cdk.context.json is intentionally committed: it caches the Route53 hosted-zone
+# lookup so `cdk synth` works in CI (preview.yml) without AWS credentials.
 *.js.map
 *.d.ts
 # data/*.json — tracked for initial/fallback content
