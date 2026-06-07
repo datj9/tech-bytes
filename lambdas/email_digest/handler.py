@@ -96,7 +96,7 @@ def _extract_top_stories(data: dict[str, Any], count: int = 5) -> list[dict[str,
 
 def _extract_top_repos(data: dict[str, Any], count: int = 3) -> list[dict[str, Any]]:
     """Extract the top N trending repos from weekly data."""
-    weekly_repos = data.get("weekly", {}).get("repos", [])
+    weekly_repos = data.get("weekly", [])
     sorted_repos = sorted(weekly_repos, key=lambda r: r.get("stars", 0), reverse=True)
     return [
         {

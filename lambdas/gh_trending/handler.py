@@ -1,26 +1,43 @@
-"""GitHub Trending — discover trending repos via GitHub Search API."""
+"""GitHub Trending — discover trending repos by scraping github.com/trending.
+
+Scrapes the public https://github.com/trending HTML (weekly + monthly), which is
+the reliable source for real trending data. README enrichment is best-effort and
+never required: if no GitHub token is configured (or the request fails), summaries
+are still produced from the trending page's own name/description/language.
+"""
 
 import json
 import logging
+import re
 import sys
 import time
-from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import requests
+from bs4 import BeautifulSoup
 
 from shared.rebuild import trigger_rebuild
-from shared.utils import emit_metric, get_github_headers, setup_logging, summarize, today_str, upload_to_s3
+from shared.utils import (
+    emit_metric,
+    get_github_headers,
+    setup_logging,
+    summarize,
+    today_str,
+    upload_to_s3,
+)
 
 setup_logging()
 logger = logging.getLogger(__name__)
 
 S3_KEY = "gh-trending.json"
 
+GITHUB_BASE = "https://github.com"
 GITHUB_API = "https://api.github.com"
-SEARCH_URL = f"{GITHUB_API}/search/repositories"
+TRENDING_URL = f"{GITHUB_BASE}/trending"
 
-PER_PAGE = 15
+USER_AGENT = "TechBytes-GHTrending/1.0 (+https://bytes.finaldivision.com)"
+FETCH_TIMEOUT = 15
+README_TIMEOUT = 10
 
 SUMMARY_PROMPT = (
     "You are a technical writer for a developer newsletter. Given a GitHub repository's "
@@ -30,38 +47,104 @@ SUMMARY_PROMPT = (
 )
 
 
-def _date_n_days_ago(days: int) -> str:
-    """Return a date string N days ago in YYYY-MM-DD format."""
-    dt = datetime.now(timezone.utc) - timedelta(days=days)
-    return dt.strftime("%Y-%m-%d")
+def _fetch_trending(since: str) -> str:
+    """Fetch the raw HTML of the GitHub trending page for a given period.
 
-
-def _search_repos(created_after: str, per_page: int = PER_PAGE) -> list[dict[str, Any]]:
-    """Search GitHub for repos created after a given date, sorted by stars."""
-    params = {
-        "q": f"created:>{created_after}",
-        "sort": "stars",
-        "order": "desc",
-        "per_page": per_page,
-    }
+    `since` is one of "weekly" / "monthly" (also accepts "daily"). Returns the
+    page HTML, or an empty string on any failure (logged, never raised).
+    """
     try:
-        resp = requests.get(SEARCH_URL, headers=get_github_headers(), params=params, timeout=15)
+        resp = requests.get(
+            TRENDING_URL,
+            params={"since": since},
+            headers={"User-Agent": USER_AGENT},
+            timeout=FETCH_TIMEOUT,
+        )
         resp.raise_for_status()
-        data = resp.json()
-        return data.get("items", [])
+        return resp.text
     except Exception:
-        logger.exception("Failed to search repos (created_after=%s)", created_after)
+        logger.exception("Failed to fetch trending page (since=%s)", since)
+        return ""
+
+
+def _first_int(text: str) -> int:
+    """Extract the first integer (with optional thousands commas) from text."""
+    match = re.search(r"[\d,]+", text)
+    if not match:
+        return 0
+    try:
+        return int(match.group(0).replace(",", ""))
+    except ValueError:
+        return 0
+
+
+def _parse_trending(html: str) -> list[dict[str, Any]]:
+    """Parse trending repo rows out of a github.com/trending HTML page.
+
+    Returns a list of dicts with name/url/description/language/stars/
+    stars_this_period. Missing optional fields default gracefully.
+    """
+    if not html:
         return []
+
+    soup = BeautifulSoup(html, "html.parser")
+    repos: list[dict[str, Any]] = []
+
+    for article in soup.select("article.Box-row"):
+        heading = article.select_one("h2.lh-condensed a[href]")
+        if heading is None:
+            continue
+        href = heading.get("href", "")
+        if not href:
+            continue
+
+        name = href.strip("/")
+        url = f"{GITHUB_BASE}{href}"
+
+        description_el = article.select_one("p.col-9")
+        description = description_el.get_text(strip=True) if description_el else ""
+
+        language_el = article.select_one('[itemprop="programmingLanguage"]')
+        language = language_el.get_text(strip=True) if language_el else ""
+
+        stars = 0
+        stars_link = article.select_one(f'a[href="{href}/stargazers"]')
+        if stars_link is not None:
+            stars = _first_int(stars_link.get_text())
+
+        stars_this_period = 0
+        for span in article.select("span.float-sm-right"):
+            text = span.get_text(strip=True)
+            if "stars this" in text or "star this" in text:
+                stars_this_period = _first_int(text)
+                break
+
+        repos.append(
+            {
+                "name": name,
+                "url": url,
+                "description": description,
+                "language": language,
+                "stars": stars,
+                "stars_this_period": stars_this_period,
+            }
+        )
+
+    return repos
 
 
 def _fetch_readme(owner: str, repo: str) -> str:
-    """Fetch the README content for a repo via GitHub API."""
+    """Fetch a repo's README via the GitHub API (best-effort).
+
+    Returns the raw README text (truncated), or an empty string on any failure
+    — including 401/403 when unauthenticated. Never raises.
+    """
     url = f"{GITHUB_API}/repos/{owner}/{repo}/readme"
     try:
         resp = requests.get(
             url,
-            headers={**HEADERS, "Accept": "application/vnd.github.raw+json"},
-            timeout=10,
+            headers={**get_github_headers(), "Accept": "application/vnd.github.raw+json"},
+            timeout=README_TIMEOUT,
         )
         if resp.status_code == 200:
             # Truncate to avoid excessive token usage
@@ -73,23 +156,20 @@ def _fetch_readme(owner: str, repo: str) -> str:
 
 
 def _process_repo(repo: dict[str, Any]) -> dict[str, Any]:
-    """Build a summary entry for a single repo."""
-    full_name = repo.get("full_name", "")
-    owner = repo.get("owner", {}).get("login", "")
+    """Enrich a parsed repo with a best-effort README and an OpenAI summary."""
     name = repo.get("name", "")
     description = repo.get("description", "") or ""
-    stars = repo.get("stargazers_count", 0)
     language = repo.get("language", "")
-    url = repo.get("html_url", "")
-    created_at = repo.get("created_at", "")
 
-    # Fetch README for richer context
-    readme = _fetch_readme(owner, name)
-    time.sleep(0.3)  # rate-limit
+    # Best-effort README enrichment — works without a token, just returns "".
+    readme = ""
+    if "/" in name:
+        owner, repo_name = name.split("/", 1)
+        readme = _fetch_readme(owner, repo_name)
+        time.sleep(0.3)  # be gentle with the GitHub API
 
-    # Build context for AI summarization
     context_parts = [
-        f"Repository: {full_name}",
+        f"Repository: {name}",
         f"Description: {description}",
     ]
     if language:
@@ -101,65 +181,51 @@ def _process_repo(repo: dict[str, Any]) -> dict[str, Any]:
     summary = summarize(context_text, SUMMARY_PROMPT, max_tokens=200)
 
     return {
-        "name": full_name,
+        "name": name,
+        "url": repo.get("url", ""),
         "description": description,
-        "url": url,
-        "stars": stars,
-        "language": language or "Unknown",
-        "created_at": created_at,
+        "language": language,
+        "stars": repo.get("stars", 0),
+        "stars_this_period": repo.get("stars_this_period", 0),
         "summary": summary,
     }
 
 
 def _process_repos(repos: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Process a list of repos into summary entries."""
+    """Enrich a list of parsed repos into final summary entries."""
     results: list[dict[str, Any]] = []
     for repo in repos:
         try:
-            entry = _process_repo(repo)
-            results.append(entry)
-            time.sleep(0.5)  # respect rate limits
+            results.append(_process_repo(repo))
+            time.sleep(0.5)  # respect OpenAI rate limits
         except Exception:
-            logger.exception(
-                "Failed to process repo %s", repo.get("full_name", "?")
-            )
+            logger.exception("Failed to process repo %s", repo.get("name", "?"))
             continue
     return results
 
 
 def handler(event: Any = None, context: Any = None) -> dict[str, Any]:
-    """Lambda handler — find trending GitHub repos, summarize, upload to S3."""
+    """Lambda handler — scrape GitHub trending, summarize, upload to S3."""
     logger.info("GitHub Trending starting")
 
-    # Weekly trending
-    weekly_date = _date_n_days_ago(7)
-    logger.info("Fetching weekly trending (created after %s)", weekly_date)
-    weekly_repos = _search_repos(weekly_date)
+    logger.info("Fetching weekly trending")
+    weekly_repos = _parse_trending(_fetch_trending("weekly"))
     weekly_results = _process_repos(weekly_repos)
 
-    time.sleep(2)  # breathing room between search API calls
+    time.sleep(2)  # breathing room between scrapes
 
-    # Monthly trending
-    monthly_date = _date_n_days_ago(30)
-    logger.info("Fetching monthly trending (created after %s)", monthly_date)
-    monthly_repos = _search_repos(monthly_date)
+    logger.info("Fetching monthly trending")
+    monthly_repos = _parse_trending(_fetch_trending("monthly"))
     monthly_results = _process_repos(monthly_repos)
 
     total_repos = len(weekly_results) + len(monthly_results)
-    # Each repo gets one summarize() call in _process_repo
+    # Each repo gets one summarize() call in _process_repo.
     openai_calls = total_repos
 
     output = {
-        "generated_at": today_str(),
-        "source": "github_search",
-        "weekly": {
-            "period": f"{weekly_date} to {today_str()}",
-            "repos": weekly_results,
-        },
-        "monthly": {
-            "period": f"{monthly_date} to {today_str()}",
-            "repos": monthly_results,
-        },
+        "updated_at": today_str(),
+        "weekly": weekly_results,
+        "monthly": monthly_results,
     }
 
     s3_successes = 0
