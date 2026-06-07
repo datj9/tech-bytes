@@ -14,7 +14,7 @@ from shared.utils import emit_metric, setup_logging, summarize, today_str, uploa
 setup_logging()
 logger = logging.getLogger(__name__)
 
-S3_KEY = "hn-digest.json"
+S3_KEY = "data/hn-digest.json"
 
 HN_API = "https://hacker-news.firebaseio.com/v0"
 TOP_STORIES_URL = f"{HN_API}/topstories.json"

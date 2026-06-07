@@ -29,7 +29,7 @@ from shared.utils import (
 setup_logging()
 logger = logging.getLogger(__name__)
 
-S3_KEY = "gh-trending.json"
+S3_KEY = "data/gh-trending.json"
 
 GITHUB_BASE = "https://github.com"
 GITHUB_API = "https://api.github.com"

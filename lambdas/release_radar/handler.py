@@ -16,7 +16,7 @@ from shared.utils import emit_metric, get_github_headers, setup_logging, summari
 setup_logging()
 logger = logging.getLogger(__name__)
 
-S3_KEY = "release-radar.json"
+S3_KEY = "data/release-radar.json"
 
 _CONFIG_FILENAME = "config/technologies.yml"
 
