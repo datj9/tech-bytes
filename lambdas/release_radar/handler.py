@@ -20,6 +20,38 @@ S3_KEY = "data/release-radar.json"
 
 _CONFIG_FILENAME = "config/technologies.yml"
 
+# The site renders an entry's icon as:
+#   categoryIcons[category.icon] ?? categoryIcons[category.name] ?? '📋'
+# so `icon` must be a KEY string into index.astro's `categoryIcons` map, NOT an
+# emoji literal. config/technologies.yml has no icon/slug field, so we map the
+# techs that have a dedicated legacy icon key by name; everything else falls back
+# to the category name (itself a valid key for all known categories).
+# Valid legacy per-tech keys in categoryIcons: nodejs, react, go, python, rust,
+# typescript, deno, bun.
+TECH_ICON_KEYS: dict[str, str] = {
+    "Node.js": "nodejs",
+    "React": "react",
+    "Go": "go",
+    "Python": "python",
+    "Rust": "rust",
+    "TypeScript": "typescript",
+    "Deno": "deno",
+    "Bun": "bun",
+}
+
+
+def _icon_key(name: str, category: str) -> str:
+    """Return the categoryIcons KEY string for an entry (never a raw emoji).
+
+    Prefer a dedicated per-tech legacy key; otherwise fall back to the category
+    name, which index.astro maps to a category emoji.
+    """
+    return TECH_ICON_KEYS.get(name, category)
+
+# A single delimiter lets us collapse the prose summary and the bullet details
+# into ONE OpenAI call (see SUMMARY_PROMPT below) instead of two.
+_DETAILS_DELIMITER = "---DETAILS---"
+
 
 def _load_technologies() -> list[dict[str, str]]:
     """Load the technology list from config/technologies.yml.
@@ -44,24 +76,29 @@ def _load_technologies() -> list[dict[str, str]]:
     return []
 
 
+# Bug 1 fix: a single prompt produces BOTH a prose summary and bullet details in
+# one OpenAI call. The two sections are separated by _DETAILS_DELIMITER so we can
+# split them deterministically. This halves the call count vs. two prompts, and
+# combined with summarizing only the latest release per tech (see _process_technology)
+# brings the total from ~220 calls down to ~22 — well under the 300s Lambda timeout.
 SUMMARY_PROMPT = (
-    "You are a technical writer. Summarize this software release into a short, "
-    "clear paragraph (2-3 sentences). Focus on the most impactful changes for "
-    "developers. Do not use markdown formatting."
-)
-
-DETAILS_PROMPT = (
-    "You are a technical writer. Extract the key changes from this software release "
-    "as a concise bullet-point list. Return only the bullet points (one per line, "
-    "prefixed with '- '). Focus on the most developer-relevant changes. "
-    "Maximum 5 bullet points."
+    "You are a technical writer summarizing a software release for developers. "
+    "Produce TWO sections separated by a line containing exactly '---DETAILS---'.\n"
+    "Section 1 (before the delimiter): a short, clear prose summary of 2-3 sentences "
+    "focusing on the most impactful changes. Do not use markdown.\n"
+    "Section 2 (after the delimiter): a concise bullet-point list of the key changes, "
+    "one per line, each prefixed with '- '. Maximum 5 bullets, most developer-relevant first."
 )
 
 GITHUB_API = "https://api.github.com"
 
 
-def _fetch_releases(repo: str, count: int = 5) -> list[dict[str, Any]]:
-    """Fetch the latest releases for a GitHub repo."""
+def _fetch_releases(repo: str, count: int = 3) -> list[dict[str, Any]]:
+    """Fetch the latest releases for a GitHub repo.
+
+    We fetch a few (default 3) as fallback so we can skip releases with an empty
+    body, but only the newest non-empty one is summarized (see _process_technology).
+    """
     url = f"{GITHUB_API}/repos/{repo}/releases"
     try:
         resp = requests.get(url, headers=get_github_headers(), params={"per_page": count}, timeout=15)
@@ -72,35 +109,61 @@ def _fetch_releases(repo: str, count: int = 5) -> list[dict[str, Any]]:
         return []
 
 
+def _split_summary_details(raw: str) -> tuple[str, str]:
+    """Split a combined OpenAI response into (prose summary, bullet details string).
+
+    `details` is returned as a newline-joined STRING (one cleaned bullet per line),
+    matching the site's `Release.details: string` contract — NOT a list.
+    """
+    if _DETAILS_DELIMITER in raw:
+        summary_part, details_part = raw.split(_DETAILS_DELIMITER, 1)
+    else:
+        # No delimiter (model didn't comply) — treat the whole thing as the summary.
+        summary_part, details_part = raw, ""
+
+    summary = summary_part.strip()
+    bullets = [
+        line.lstrip("-* ").strip()
+        for line in details_part.strip().splitlines()
+        if line.strip().lstrip("-* ").strip()
+    ]
+    details = "\n".join(f"- {b}" for b in bullets)
+    return summary, details
+
+
 def _process_release(release: dict[str, Any]) -> dict[str, Any]:
-    """Summarize a single release using OpenAI."""
+    """Summarize a single release using ONE OpenAI call.
+
+    Output keys match the site contract (site/src/pages/index.astro -> Release):
+    version, date (from published_at), summary (string), details (string).
+    """
     tag = release.get("tag_name", "unknown")
     body = release.get("body", "") or ""
     name = release.get("name", tag)
-    published = release.get("published_at", "")
+    published = release.get("published_at", "") or ""
+    # Site expects a YYYY-MM-DD date; published_at is an ISO datetime.
+    date = published.split("T", 1)[0] if published else ""
 
     text_for_ai = f"Release: {name}\nTag: {tag}\n\n{body}"
-
-    summary = summarize(text_for_ai, SUMMARY_PROMPT, max_tokens=200)
-    details_raw = summarize(text_for_ai, DETAILS_PROMPT, max_tokens=300)
-    details = [
-        line.lstrip("- ").strip()
-        for line in details_raw.strip().splitlines()
-        if line.strip().startswith("-")
-    ]
+    raw = summarize(text_for_ai, SUMMARY_PROMPT, max_tokens=400)
+    summary, details = _split_summary_details(raw)
 
     return {
         "version": tag,
-        "name": name,
-        "published_at": published,
+        "date": date,
         "summary": summary,
         "details": details,
-        "url": release.get("html_url", ""),
     }
 
 
 def _process_technology(tech: dict[str, str]) -> dict[str, Any] | None:
-    """Fetch and summarize releases for one technology."""
+    """Fetch releases for one technology and summarize ONLY the latest one.
+
+    Bug 1 fix: a daily digest only needs the newest release per technology, so we
+    summarize at most one. We still fetch a couple as fallback and pick the newest
+    release that has a non-empty body (to avoid summarizing an empty changelog).
+    Returns a category-shaped dict for the frontend, or None if nothing usable.
+    """
     name = tech["name"]
     repo = tech["repo"]
     category = tech.get("category", "Uncategorized")
@@ -111,60 +174,50 @@ def _process_technology(tech: dict[str, str]) -> dict[str, Any] | None:
         logger.warning("No releases found for %s", name)
         return None
 
-    processed: list[dict[str, Any]] = []
-    for release in releases:
-        try:
-            processed.append(_process_release(release))
-            time.sleep(0.5)  # respect rate limits
-        except Exception:
-            logger.exception(
-                "Failed to process release %s for %s",
-                release.get("tag_name", "?"),
-                name,
-            )
-            continue
+    # Newest first from the API; prefer the latest release with a real body,
+    # otherwise fall back to the very latest.
+    latest = next((r for r in releases if (r.get("body") or "").strip()), releases[0])
+
+    try:
+        processed = _process_release(latest)
+    except Exception:
+        logger.exception("Failed to process release %s for %s", latest.get("tag_name", "?"), name)
+        return None
 
     return {
-        "technology": name,
-        "repo": repo,
+        "name": name,
+        "icon": _icon_key(name, category),
         "category": category,
-        "releases": processed,
+        "releases": [processed],
     }
 
 
 def handler(event: Any = None, context: Any = None) -> dict[str, Any]:
-    """Lambda handler — fetch all technology releases, summarize, upload to S3."""
+    """Lambda handler — fetch each technology's latest release, summarize, upload to S3."""
     logger.info("Release Radar starting")
 
     technologies = _load_technologies()
     if not technologies:
         logger.error("No technologies to process — check config/technologies.yml")
-        return {"generated_at": today_str(), "source": "github_releases", "technologies": [], "categories": {}}
+        return {"updated_at": today_str(), "categories": []}
 
-    results: list[dict[str, Any]] = []
+    categories: list[dict[str, Any]] = []
     openai_calls = 0
     for tech in technologies:
         try:
             entry = _process_technology(tech)
             if entry:
-                results.append(entry)
-                # Each release gets 2 OpenAI calls (summary + details)
-                openai_calls += len(entry.get("releases", [])) * 2
-            time.sleep(1)  # breathing room between repos
+                categories.append(entry)
+                # One OpenAI call per summarized release (latest-only => 1 per tech).
+                openai_calls += len(entry.get("releases", []))
+            # Small breathing room between repos; with ~22 calls this is negligible.
+            time.sleep(0.2)
         except Exception:
             logger.exception("Failed to process technology %s", tech["name"])
             continue
 
-    # Build category grouping for the frontend
-    categories: dict[str, list[dict[str, Any]]] = {}
-    for entry in results:
-        cat = entry.get("category", "Uncategorized")
-        categories.setdefault(cat, []).append(entry)
-
     output = {
-        "generated_at": today_str(),
-        "source": "github_releases",
-        "technologies": results,
+        "updated_at": today_str(),
         "categories": categories,
     }
 
@@ -189,12 +242,12 @@ def handler(event: Any = None, context: Any = None) -> dict[str, Any]:
     trigger_rebuild()
 
     # Emit custom metrics
-    emit_metric("TechnologiesProcessed", len(results))
+    emit_metric("TechnologiesProcessed", len(categories))
     emit_metric("OpenAISummarizations", openai_calls)
     emit_metric("S3UploadsSucceeded", s3_successes)
     emit_metric("S3UploadsFailed", s3_failures)
 
-    logger.info("Release Radar complete — processed %d technologies", len(results))
+    logger.info("Release Radar complete — processed %d technologies", len(categories))
     return output
 
 
