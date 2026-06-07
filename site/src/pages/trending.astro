@@ -1,32 +1,10 @@
 ---
 import Base from '../layouts/Base.astro';
-import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { loadTrending, type TrendingData } from '../lib/trending';
 
-interface Repo {
-  name: string;
-  url: string;
-  description: string;
-  language: string;
-  stars: number;
-  stars_this_period: number;
-  summary: string;
-}
-
-interface TrendingData {
-  updated_at: string;
-  weekly: Repo[];
-  monthly: Repo[];
-}
-
-let data: TrendingData = { updated_at: '', weekly: [], monthly: [] };
-
-try {
-  const dataPath = resolve(process.cwd(), '..', 'data', 'gh-trending.json');
-  data = JSON.parse(readFileSync(dataPath, 'utf-8'));
-} catch {
-  // data file not found — use empty defaults
-}
+const dataPath = resolve(process.cwd(), '..', 'data', 'gh-trending.json');
+const data: TrendingData = loadTrending(dataPath);
 
 const languageColors: Record<string, string> = {
   TypeScript: 'bg-blue-500',

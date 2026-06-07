@@ -1,33 +1,11 @@
 import rss from '@astrojs/rss';
 import type { APIContext } from 'astro';
-import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-
-interface Repo {
-  name: string;
-  url: string;
-  description: string;
-  language: string;
-  stars: number;
-  stars_this_period: number;
-  summary: string;
-}
-
-interface TrendingData {
-  updated_at: string;
-  weekly: Repo[];
-  monthly: Repo[];
-}
+import { loadTrending, type Repo } from '../../lib/trending';
 
 export function GET(context: APIContext) {
-  let data: TrendingData = { updated_at: '', weekly: [], monthly: [] };
-
-  try {
-    const dataPath = resolve(process.cwd(), '..', 'data', 'gh-trending.json');
-    data = JSON.parse(readFileSync(dataPath, 'utf-8'));
-  } catch {
-    // data file not found — use empty defaults
-  }
+  const dataPath = resolve(process.cwd(), '..', 'data', 'gh-trending.json');
+  const data = loadTrending(dataPath);
 
   const pubDate = data.updated_at ? new Date(data.updated_at) : new Date();
 
