@@ -1,6 +1,7 @@
 ---
 import Base from '../../../layouts/Base.astro';
-import { readFileSync, readdirSync } from 'node:fs';
+import { getDataDir, readDataJson } from '../../../lib/config';
+import { readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 interface Release {
@@ -23,7 +24,7 @@ interface ReleaseData {
 }
 
 export function getStaticPaths() {
-  const archiveDir = resolve(process.cwd(), '..', 'data', 'archive', 'release-radar');
+  const archiveDir = resolve(getDataDir(), 'archive', 'release-radar');
   let dates: string[] = [];
   try {
     dates = readdirSync(archiveDir)
@@ -46,32 +47,7 @@ export function getStaticPaths() {
 const { date } = Astro.params;
 const { prevDate, nextDate } = Astro.props;
 
-let data: ReleaseData = { updated_at: '', categories: [] };
-
-try {
-  const dataPath = resolve(process.cwd(), '..', 'data', 'archive', 'release-radar', `${date}.json`);
-  data = JSON.parse(readFileSync(dataPath, 'utf-8'));
-} catch {
-  // data file not found
-}
-
-const categoryIcons: Record<string, string> = {
-  Runtimes: '\u{1F680}',
-  Frontend: '\u269B\uFE0F',
-  'Meta-Frameworks': '\u{1F4E6}',
-  Languages: '\u{1F537}',
-  CSS: '\u{1F3A8}',
-  'Build Tools': '\u{1F527}',
-  Infrastructure: '\u{1F3D7}\uFE0F',
-  nodejs: '\u{1F7E2}',
-  react: '\u269B\uFE0F',
-  go: '\u{1F439}',
-  python: '\u{1F40D}',
-  rust: '\u{1F980}',
-  typescript: '\u{1F537}',
-  deno: '\u{1F995}',
-  bun: '\u{1F35E}',
-};
+const data = readDataJson<ReleaseData>(`archive/release-radar/${date}.json`) ?? { updated_at: '', categories: [] };
 
 function formatDateStr(dateStr: string): string {
   return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', {
@@ -160,7 +136,6 @@ const sections = groupByCategory(data.categories);
         <div>
           {section.label && (
             <div class="flex items-center gap-3 mb-4">
-              <span class="text-2xl">{categoryIcons[section.label] ?? '\u{1F4CB}'}</span>
               <h2 class="text-2xl font-bold text-slate-100">{section.label}</h2>
             </div>
           )}
@@ -169,7 +144,7 @@ const sections = groupByCategory(data.categories);
             {section.items.map((category) => (
               <section class="border border-slate-800 rounded-xl overflow-hidden">
                 <div class="bg-slate-800/50 px-6 py-4 flex items-center gap-3">
-                  <span class="text-2xl">{categoryIcons[category.icon] ?? categoryIcons[category.name] ?? '\u{1F4CB}'}</span>
+                  <span class="text-2xl">{category.icon || '\u{1F4CB}'}</span>
                   <h3 class="text-xl font-semibold text-slate-100">{category.name}</h3>
                   {category.category && (
                     <span class="text-xs text-slate-500 bg-slate-800 px-2 py-0.5 rounded-full">

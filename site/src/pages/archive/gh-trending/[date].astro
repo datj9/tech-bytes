@@ -1,11 +1,12 @@
 ---
 import Base from '../../../layouts/Base.astro';
+import { dataPath, getDataDir } from '../../../lib/config';
 import { readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { loadTrending, type TrendingData } from '../../../lib/trending';
 
 export function getStaticPaths() {
-  const archiveDir = resolve(process.cwd(), '..', 'data', 'archive', 'gh-trending');
+  const archiveDir = resolve(getDataDir(), 'archive', 'gh-trending');
   let dates: string[] = [];
   try {
     dates = readdirSync(archiveDir)
@@ -28,8 +29,7 @@ export function getStaticPaths() {
 const { date } = Astro.params;
 const { prevDate, nextDate } = Astro.props;
 
-const dataPath = resolve(process.cwd(), '..', 'data', 'archive', 'gh-trending', `${date}.json`);
-const data: TrendingData = loadTrending(dataPath);
+const data: TrendingData = loadTrending(dataPath(`archive/gh-trending/${date}.json`));
 
 const languageColors: Record<string, string> = {
   TypeScript: 'bg-blue-500',

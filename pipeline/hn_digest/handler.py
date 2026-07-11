@@ -1,27 +1,36 @@
-"""Hacker News Digest — fetch top stories, summarize, and upload to S3."""
+"""Hacker News Digest — fetch top stories, summarize, write to storage.
 
-import json
+Pipeline source (framework-agnostic). Run via `python -m pipeline.run hn_digest`.
+The Lambda entrypoint (`handler`) is preserved as a thin wrapper for the optional
+AWS path.
+"""
+
+from __future__ import annotations
+
 import logging
-import sys
 import time
 from typing import Any
 
 import requests
 
-from shared.rebuild import trigger_rebuild
-from shared.utils import emit_metric, setup_logging, summarize, today_str, upload_to_s3
+from pipeline.providers import get_provider
+from pipeline.shared.config import load_config, source_config
+from pipeline.shared.rebuild import trigger_rebuild
+from pipeline.shared.utils import emit_metric, setup_logging, today_str
+from pipeline.storage import get_storage
 
 setup_logging()
 logger = logging.getLogger(__name__)
 
-S3_KEY = "data/hn-digest.json"
+DATA_KEY = "data/hn-digest.json"
+ARCHIVE_SLUG = "hn-digest"
 
 HN_API = "https://hacker-news.firebaseio.com/v0"
 TOP_STORIES_URL = f"{HN_API}/topstories.json"
 ITEM_URL = f"{HN_API}/item/{{id}}.json"
 
-FETCH_COUNT = 30
-TOP_N = 15
+DEFAULT_FETCH_COUNT = 30
+DEFAULT_TOP_N = 15
 PAGE_FETCH_TIMEOUT = 10
 
 SUMMARY_PROMPT = (
@@ -32,23 +41,19 @@ SUMMARY_PROMPT = (
 )
 
 
-def _fetch_top_story_ids(count: int = FETCH_COUNT) -> list[int]:
-    """Fetch the top story IDs from Hacker News."""
+def _fetch_top_story_ids(count: int) -> list[int]:
     try:
         resp = requests.get(TOP_STORIES_URL, timeout=10)
         resp.raise_for_status()
-        ids = resp.json()
-        return ids[:count]
+        return resp.json()[:count]
     except Exception:
         logger.exception("Failed to fetch top stories")
         return []
 
 
 def _fetch_story(story_id: int) -> dict[str, Any] | None:
-    """Fetch a single story's details."""
-    url = ITEM_URL.format(id=story_id)
     try:
-        resp = requests.get(url, timeout=10)
+        resp = requests.get(ITEM_URL.format(id=story_id), timeout=10)
         resp.raise_for_status()
         return resp.json()
     except Exception:
@@ -57,7 +62,6 @@ def _fetch_story(story_id: int) -> dict[str, Any] | None:
 
 
 def _fetch_page_content(url: str) -> str:
-    """Attempt to fetch the text content of a story URL."""
     try:
         resp = requests.get(
             url,
@@ -65,16 +69,13 @@ def _fetch_page_content(url: str) -> str:
             headers={"User-Agent": "TechBytes-HNDigest/1.0"},
         )
         resp.raise_for_status()
-        # Return raw text, truncated to avoid excessive token usage
-        text = resp.text[:5000]
-        return text
+        return resp.text[:5000]
     except Exception:
         logger.warning("Failed to fetch page content from %s", url)
         return ""
 
 
-def _summarize_story(story: dict[str, Any]) -> dict[str, Any]:
-    """Build a summary for a single HN story."""
+def _summarize_story(story: dict[str, Any], provider: Any) -> dict[str, Any]:
     title = story.get("title", "Untitled")
     url = story.get("url", "")
     score = story.get("score", 0)
@@ -83,17 +84,16 @@ def _summarize_story(story: dict[str, Any]) -> dict[str, Any]:
     comments = story.get("descendants", 0)
     hn_url = f"https://news.ycombinator.com/item?id={story_id}"
 
-    # Build context for the AI summary
     context_parts = [f"Title: {title}"]
     if url:
         context_parts.append(f"URL: {url}")
         page_content = _fetch_page_content(url)
         if page_content:
             context_parts.append(f"Page content (truncated):\n{page_content}")
-        time.sleep(0.3)  # rate-limit page fetches
+        time.sleep(0.3)
 
     context_text = "\n\n".join(context_parts)
-    summary = summarize(context_text, SUMMARY_PROMPT, max_tokens=200)
+    summary = provider.summarize(context_text, SUMMARY_PROMPT, max_tokens=200)
 
     return {
         "title": title,
@@ -107,79 +107,61 @@ def _summarize_story(story: dict[str, Any]) -> dict[str, Any]:
 
 
 def handler(event: Any = None, context: Any = None) -> dict[str, Any]:
-    """Lambda handler — fetch top HN stories, summarize, upload to S3."""
+    """Fetch top HN stories, summarize, write to storage. Lambda-compatible."""
     logger.info("HN Digest starting")
 
-    # Fetch top story IDs
-    story_ids = _fetch_top_story_ids(FETCH_COUNT)
+    config = load_config()
+    src_cfg = source_config(config, "hn_digest")
+    fetch_count = int(src_cfg.get("fetch_count", DEFAULT_FETCH_COUNT))
+    top_n = int(src_cfg.get("top_n", DEFAULT_TOP_N))
+
+    story_ids = _fetch_top_story_ids(fetch_count)
     if not story_ids:
         logger.error("No story IDs fetched — aborting")
         return {"generated_at": today_str(), "source": "hacker_news", "stories": []}
 
-    # Fetch story details
     stories: list[dict[str, Any]] = []
     for sid in story_ids:
         story = _fetch_story(sid)
         if story:
             stories.append(story)
-        time.sleep(0.2)  # small delay between API calls
+        time.sleep(0.2)
 
-    # Sort by score descending and take top N
     stories.sort(key=lambda s: s.get("score", 0), reverse=True)
-    top_stories = stories[:TOP_N]
-
+    top_stories = stories[:top_n]
     logger.info("Fetched %d stories, processing top %d", len(stories), len(top_stories))
 
-    # Summarize each story
+    provider = get_provider(config)
     results: list[dict[str, Any]] = []
-    openai_calls = 0
     for story in top_stories:
         try:
-            entry = _summarize_story(story)
-            results.append(entry)
-            openai_calls += 1  # one summarize() call per story
-            time.sleep(0.5)  # respect OpenAI rate limits
+            results.append(_summarize_story(story, provider))
+            time.sleep(0.5)
         except Exception:
             logger.exception("Failed to summarize story: %s", story.get("title", "?"))
             continue
 
-    output = {
-        "generated_at": today_str(),
-        "source": "hacker_news",
-        "stories": results,
-    }
+    output = {"generated_at": today_str(), "source": "hacker_news", "stories": results}
 
-    s3_successes = 0
-    s3_failures = 0
-
+    storage = get_storage()
     try:
-        upload_to_s3(output, S3_KEY)
-        s3_successes += 1
+        storage.write_json(DATA_KEY, output, archive_slug=ARCHIVE_SLUG)
     except Exception:
-        logger.exception("Failed to upload to S3")
-        s3_failures += 1
-
-    try:
-        archive_key = f"data/archive/hn-digest/{today_str()}.json"
-        upload_to_s3(output, archive_key)
-        s3_successes += 1
-    except Exception:
-        logger.exception("Failed to upload archive copy to S3")
-        s3_failures += 1
+        logger.exception("Failed to write hn-digest data")
 
     trigger_rebuild()
 
-    # Emit custom metrics
     emit_metric("StoriesProcessed", len(results))
-    emit_metric("OpenAISummarizations", openai_calls)
-    emit_metric("S3UploadsSucceeded", s3_successes)
-    emit_metric("S3UploadsFailed", s3_failures)
+    emit_metric("LLMSummarizations", len(results))
 
     logger.info("HN Digest complete — processed %d stories", len(results))
     return output
 
 
 if __name__ == "__main__":
+    import json as _json
+    import sys
+
     try:
         from dotenv import load_dotenv
 
@@ -188,5 +170,5 @@ if __name__ == "__main__":
         pass
 
     result = handler()
-    print(json.dumps(result, indent=2, ensure_ascii=False))
+    print(_json.dumps(result, indent=2, ensure_ascii=False))
     sys.exit(0)

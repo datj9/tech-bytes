@@ -1,0 +1,16 @@
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["pipeline/tests"]
+filterwarnings = ["error"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+extend-exclude = ["infra/node_modules", "site/node_modules", "site/dist"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP", "B", "C4", "SIM"]
+ignore = ["E501"]  # line length handled by formatter
+
+[tool.ruff.lint.per-file-ignores]
+"pipeline/tests/*" = ["B011"]

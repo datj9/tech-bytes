@@ -1,5 +1,6 @@
 ---
 import Base from '../../layouts/Base.astro';
+import { getDataDir } from '../../lib/config';
 import { readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -13,7 +14,7 @@ interface ArchiveSection {
 
 function readArchiveDates(dirName: string): string[] {
   try {
-    const dirPath = resolve(process.cwd(), '..', 'data', 'archive', dirName);
+    const dirPath = resolve(getDataDir(), 'archive', dirName);
     const files = readdirSync(dirPath)
       .filter((f) => f.endsWith('.json'))
       .map((f) => f.replace('.json', ''))

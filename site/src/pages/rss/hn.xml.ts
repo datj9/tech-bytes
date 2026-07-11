@@ -1,7 +1,6 @@
 import rss from '@astrojs/rss';
 import type { APIContext } from 'astro';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { getSiteConfig, readDataJson } from '../../lib/config';
 
 interface Story {
   title: string;
@@ -13,21 +12,16 @@ interface Story {
 }
 
 interface HNData {
-  date: string;
+  date?: string;
+  generated_at?: string;
   stories: Story[];
 }
 
 export function GET(context: APIContext) {
-  let data: HNData = { date: '', stories: [] };
+  const data = readDataJson<HNData>('hn-digest.json') ?? { stories: [] };
+  const site = getSiteConfig();
 
-  try {
-    const dataPath = resolve(process.cwd(), '..', 'data', 'hn-digest.json');
-    data = JSON.parse(readFileSync(dataPath, 'utf-8'));
-  } catch {
-    // data file not found — use empty defaults
-  }
-
-  const pubDate = data.date ? new Date(data.date) : new Date();
+  const pubDate = data.date || data.generated_at ? new Date(data.date || data.generated_at!) : new Date();
 
   const items = data.stories.map((story) => ({
     title: story.title,
@@ -36,10 +30,12 @@ export function GET(context: APIContext) {
     pubDate,
   }));
 
+  const siteUrl = context.site?.toString() || site.url || 'https://example.com';
+
   return rss({
-    title: 'Tech Bytes — HN Daily Digest',
+    title: `${site.title} — HN Daily Digest`,
     description: 'Top Hacker News stories, summarized daily',
-    site: context.site!.toString(),
+    site: siteUrl,
     items,
   });
 }

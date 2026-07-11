@@ -1,7 +1,6 @@
 import rss from '@astrojs/rss';
 import type { APIContext } from 'astro';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { getSiteConfig, readDataJson } from '../../lib/config';
 
 interface Release {
   version: string;
@@ -22,14 +21,8 @@ interface ReleaseData {
 }
 
 export function GET(context: APIContext) {
-  let data: ReleaseData = { updated_at: '', categories: [] };
-
-  try {
-    const dataPath = resolve(process.cwd(), '..', 'data', 'release-radar.json');
-    data = JSON.parse(readFileSync(dataPath, 'utf-8'));
-  } catch {
-    // data file not found — use empty defaults
-  }
+  const data = readDataJson<ReleaseData>('release-radar.json') ?? { updated_at: '', categories: [] };
+  const site = getSiteConfig();
 
   const items = data.categories.flatMap((category) =>
     category.releases.map((release) => ({
@@ -40,10 +33,12 @@ export function GET(context: APIContext) {
     }))
   );
 
+  const siteUrl = context.site?.toString() || site.url || 'https://example.com';
+
   return rss({
-    title: 'Tech Bytes — Release Radar',
+    title: `${site.title} — Release Radar`,
     description: 'Latest version updates across frameworks, runtimes, and languages',
-    site: context.site!.toString(),
+    site: siteUrl,
     items,
   });
 }

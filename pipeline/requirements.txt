@@ -1,0 +1,23 @@
+# Tech Bytes pipeline — Python dependencies.
+# Install everything:   pip install -r requirements.txt
+# Minimal (local + no LLM calls): pyyaml, requests, beautifulsoup4, python-dotenv
+#
+# --- required (always) ---
+pyyaml>=6.0.0
+requests>=2.31.0
+beautifulsoup4>=4.12.0
+python-dotenv>=1.0.0
+
+# --- LLM provider: pick at least one based on your `llm.provider` config ---
+# openai provider (also reused by the local/OpenAI-compatible provider):
+openai>=1.30.0
+# anthropic provider (uncomment to use claude):
+# anthropic>=0.40.0
+
+# --- AWS storage / Lambda path only (STORAGE=s3, SES email, SSM secrets) ---
+# Uncomment for the AWS/CDK deploy path; not needed for GitHub Pages or local.
+# boto3>=1.34.0
+
+# --- testing ---
+# pytest>=8.0.0
+# ruff>=0.6.0

@@ -1,10 +1,9 @@
 ---
 import Base from '../layouts/Base.astro';
-import { resolve } from 'node:path';
+import { dataPath } from '../lib/config';
 import { loadTrending, type TrendingData } from '../lib/trending';
 
-const dataPath = resolve(process.cwd(), '..', 'data', 'gh-trending.json');
-const data: TrendingData = loadTrending(dataPath);
+const data: TrendingData = loadTrending(dataPath('gh-trending.json'));
 
 const languageColors: Record<string, string> = {
   TypeScript: 'bg-blue-500',
