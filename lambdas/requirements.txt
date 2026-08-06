@@ -1,5 +1,5 @@
-openai>=1.30.0
-pyyaml>=6.0.0
-requests>=2.31.0
-boto3>=1.34.0
-beautifulsoup4>=4.12.0
+openai>=2.53.0
+pyyaml>=6.0.3
+requests>=2.34.2
+boto3>=1.43.65
+beautifulsoup4>=4.15.0
