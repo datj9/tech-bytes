@@ -1,0 +1,103 @@
+name: Digest (Pages)
+
+# Primary deploy path for forks — no AWS required.
+# Cron runs the pipeline, commits refreshed data/, builds the site, deploys to Pages.
+# Secrets needed (set in repo Settings → Secrets):
+#   OPENAI_API_KEY        — if llm.provider=openai (default)
+#   ANTHROPIC_API_KEY     — if llm.provider=anthropic
+#   LLM_API_KEY           — if llm.provider=local and your server requires a key
+# Optional:
+#   GITHUB_TOKEN          — bumps the GitHub API rate limit for trending/readme fetches
+#   PUBLIC_SITE_URL       — canonical site URL for RSS/sitemap (e.g. https://user.github.io/repo)
+#   PUBLIC_SITE_TITLE     — overrides site.title from config
+
+on:
+  schedule:
+    # 06:00 UTC daily — adjust to taste
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write   # commit data/ back
+  pages: write      # deploy to Pages
+  id-token: write   # Pages deploy token
+
+concurrency:
+  group: digest-pages
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install pipeline deps
+        working-directory: pipeline
+        run: |
+          python -m pip install --upgrade pip
+          # Install base + the provider matching your config (default: openai).
+          # Add anthropic to the line below if llm.provider=anthropic.
+          pip install -r requirements.txt
+
+      - name: Run pipeline (all enabled sources)
+        env:
+          STORAGE: local
+          DATA_DIR: ${{ github.workspace }}/data
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: python -m pipeline.run all
+
+      - name: Commit refreshed data/
+        working-directory: data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Add and commit if anything changed; skip cleanly otherwise.
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No data changes to commit."
+          else
+            git commit -m "chore(data): refresh digest [skip ci]"
+            git push
+          fi
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Build site
+        working-directory: site
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          PUBLIC_SITE_URL: ${{ secrets.PUBLIC_SITE_URL }}
+          PUBLIC_SITE_TITLE: ${{ secrets.PUBLIC_SITE_TITLE }}
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm run build
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site/dist
+
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4

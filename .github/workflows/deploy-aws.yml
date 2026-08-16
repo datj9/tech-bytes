@@ -1,4 +1,12 @@
-name: Deploy
+name: Deploy (AWS)
+
+# Optional advanced path — requires AWS CDK + a Route53-managed domain.
+# Configure infra/cdk.json context (or pass -c flags) for your domain/repo/region.
+# Secrets (set in repo Settings → Secrets):
+#   AWS_ROLE_ARN  — the OIDC role from a prior `cdk deploy` output (GitHubActionsRoleArn)
+#
+# This workflow only runs on push to the default branch OR manual dispatch.
+# The free path lives in digest.yml.
 
 on:
   push:
@@ -10,7 +18,7 @@ permissions:
   contents: read
 
 env:
-  AWS_REGION: ap-southeast-1
+  AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
 
 jobs:
   build-and-deploy:
@@ -34,12 +42,11 @@ jobs:
 
       - name: Download latest data from S3
         run: |
-          BUCKET=$(aws cloudformation describe-stacks --stack-name TechBytesStack --query "Stacks[0].Outputs[?OutputKey=='BucketName'].OutputValue" --output text)
+          STACK_NAME="${{ vars.CDK_STACK_NAME || 'TechBytesStack' }}"
+          BUCKET=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query "Stacks[0].Outputs[?OutputKey=='BucketName'].OutputValue" --output text)
           mkdir -p data
           aws s3 sync "s3://${BUCKET}/data/" data/ --exclude "archive/*" || true
           aws s3 sync "s3://${BUCKET}/data/archive/" data/archive/ || true
-        env:
-          AWS_REGION: ap-southeast-1
 
       - name: Install and build site
         working-directory: site
@@ -51,4 +58,7 @@ jobs:
         working-directory: infra
         run: |
           pnpm install --frozen-lockfile
-          pnpm exec cdk deploy --require-approval never
+          pnpm exec cdk deploy --require-approval never \
+            --context domain.name=${{ vars.CDK_DOMAIN_NAME }} \
+            --context hosted.zone.name=${{ vars.CDK_HOSTED_ZONE_NAME }} \
+            --context github.repo=${{ github.repository }}

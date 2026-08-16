@@ -1,41 +1,38 @@
 """GitHub Trending — discover trending repos by scraping github.com/trending.
 
-Scrapes the public https://github.com/trending HTML (weekly + monthly), which is
-the reliable source for real trending data. README enrichment is best-effort and
-never required: if no GitHub token is configured (or the request fails), summaries
-are still produced from the trending page's own name/description/language.
+Scrapes the public https://github.com/trending HTML (weekly + monthly). README
+enrichment is best-effort and never required: if no GitHub token is configured,
+summaries are still produced from the trending page's own name/description/language.
+
+Pipeline source (framework-agnostic). Run via `python -m pipeline.run gh_trending`.
 """
 
-import json
+from __future__ import annotations
+
 import logging
-import re
-import sys
 import time
 from typing import Any
 
 import requests
 from bs4 import BeautifulSoup
 
-from shared.rebuild import trigger_rebuild
-from shared.utils import (
-    emit_metric,
-    get_github_headers,
-    setup_logging,
-    summarize,
-    today_str,
-    upload_to_s3,
-)
+from pipeline.providers import get_provider
+from pipeline.shared.config import load_config
+from pipeline.shared.rebuild import trigger_rebuild
+from pipeline.shared.utils import emit_metric, get_github_headers, setup_logging, today_str
+from pipeline.storage import get_storage
 
 setup_logging()
 logger = logging.getLogger(__name__)
 
-S3_KEY = "data/gh-trending.json"
+DATA_KEY = "data/gh-trending.json"
+ARCHIVE_SLUG = "gh-trending"
 
 GITHUB_BASE = "https://github.com"
 GITHUB_API = "https://api.github.com"
 TRENDING_URL = f"{GITHUB_BASE}/trending"
 
-USER_AGENT = "TechBytes-GHTrending/1.0 (+https://bytes.finaldivision.com)"
+USER_AGENT = "TechBytes-GHTrending/1.0"
 FETCH_TIMEOUT = 15
 README_TIMEOUT = 10
 
@@ -48,11 +45,7 @@ SUMMARY_PROMPT = (
 
 
 def _fetch_trending(since: str) -> str:
-    """Fetch the raw HTML of the GitHub trending page for a given period.
-
-    `since` is one of "weekly" / "monthly" (also accepts "daily"). Returns the
-    page HTML, or an empty string on any failure (logged, never raised).
-    """
+    """Fetch trending page HTML for `since` in {daily,weekly,monthly}."""
     try:
         resp = requests.get(
             TRENDING_URL,
@@ -68,7 +61,8 @@ def _fetch_trending(since: str) -> str:
 
 
 def _first_int(text: str) -> int:
-    """Extract the first integer (with optional thousands commas) from text."""
+    import re
+
     match = re.search(r"[\d,]+", text)
     if not match:
         return 0
@@ -79,11 +73,7 @@ def _first_int(text: str) -> int:
 
 
 def _parse_trending(html: str) -> list[dict[str, Any]]:
-    """Parse trending repo rows out of a github.com/trending HTML page.
-
-    Returns a list of dicts with name/url/description/language/stars/
-    stars_this_period. Missing optional fields default gracefully.
-    """
+    """Parse trending repo rows out of github.com/trending HTML."""
     if not html:
         return []
 
@@ -134,11 +124,7 @@ def _parse_trending(html: str) -> list[dict[str, Any]]:
 
 
 def _fetch_readme(owner: str, repo: str) -> str:
-    """Fetch a repo's README via the GitHub API (best-effort).
-
-    Returns the raw README text (truncated), or an empty string on any failure
-    — including 401/403 when unauthenticated. Never raises.
-    """
+    """Fetch a repo's README via the GitHub API (best-effort)."""
     url = f"{GITHUB_API}/repos/{owner}/{repo}/readme"
     try:
         resp = requests.get(
@@ -147,7 +133,6 @@ def _fetch_readme(owner: str, repo: str) -> str:
             timeout=README_TIMEOUT,
         )
         if resp.status_code == 200:
-            # Truncate to avoid excessive token usage
             return resp.text[:3000]
         return ""
     except Exception:
@@ -155,30 +140,26 @@ def _fetch_readme(owner: str, repo: str) -> str:
         return ""
 
 
-def _process_repo(repo: dict[str, Any]) -> dict[str, Any]:
-    """Enrich a parsed repo with a best-effort README and an OpenAI summary."""
+def _process_repo(repo: dict[str, Any], provider: Any) -> dict[str, Any]:
+    """Enrich a parsed repo with a best-effort README and an LLM summary."""
     name = repo.get("name", "")
     description = repo.get("description", "") or ""
     language = repo.get("language", "")
 
-    # Best-effort README enrichment — works without a token, just returns "".
     readme = ""
     if "/" in name:
         owner, repo_name = name.split("/", 1)
         readme = _fetch_readme(owner, repo_name)
-        time.sleep(0.3)  # be gentle with the GitHub API
+        time.sleep(0.3)
 
-    context_parts = [
-        f"Repository: {name}",
-        f"Description: {description}",
-    ]
+    context_parts = [f"Repository: {name}", f"Description: {description}"]
     if language:
         context_parts.append(f"Language: {language}")
     if readme:
         context_parts.append(f"README (truncated):\n{readme}")
 
     context_text = "\n\n".join(context_parts)
-    summary = summarize(context_text, SUMMARY_PROMPT, max_tokens=200)
+    summary = provider.summarize(context_text, SUMMARY_PROMPT, max_tokens=200)
 
     return {
         "name": name,
@@ -191,13 +172,12 @@ def _process_repo(repo: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _process_repos(repos: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Enrich a list of parsed repos into final summary entries."""
+def _process_repos(repos: list[dict[str, Any]], provider: Any) -> list[dict[str, Any]]:
     results: list[dict[str, Any]] = []
     for repo in repos:
         try:
-            results.append(_process_repo(repo))
-            time.sleep(0.5)  # respect OpenAI rate limits
+            results.append(_process_repo(repo, provider))
+            time.sleep(0.5)
         except Exception:
             logger.exception("Failed to process repo %s", repo.get("name", "?"))
             continue
@@ -205,22 +185,22 @@ def _process_repos(repos: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def handler(event: Any = None, context: Any = None) -> dict[str, Any]:
-    """Lambda handler — scrape GitHub trending, summarize, upload to S3."""
+    """Scrape GitHub trending, summarize, write to storage. Lambda-compatible."""
     logger.info("GitHub Trending starting")
+
+    provider = get_provider(load_config())
 
     logger.info("Fetching weekly trending")
     weekly_repos = _parse_trending(_fetch_trending("weekly"))
-    weekly_results = _process_repos(weekly_repos)
+    weekly_results = _process_repos(weekly_repos, provider)
 
-    time.sleep(2)  # breathing room between scrapes
+    time.sleep(2)
 
     logger.info("Fetching monthly trending")
     monthly_repos = _parse_trending(_fetch_trending("monthly"))
-    monthly_results = _process_repos(monthly_repos)
+    monthly_results = _process_repos(monthly_repos, provider)
 
     total_repos = len(weekly_results) + len(monthly_results)
-    # Each repo gets one summarize() call in _process_repo.
-    openai_calls = total_repos
 
     output = {
         "updated_at": today_str(),
@@ -228,31 +208,16 @@ def handler(event: Any = None, context: Any = None) -> dict[str, Any]:
         "monthly": monthly_results,
     }
 
-    s3_successes = 0
-    s3_failures = 0
-
+    storage = get_storage()
     try:
-        upload_to_s3(output, S3_KEY)
-        s3_successes += 1
+        storage.write_json(DATA_KEY, output, archive_slug=ARCHIVE_SLUG)
     except Exception:
-        logger.exception("Failed to upload to S3")
-        s3_failures += 1
-
-    try:
-        archive_key = f"data/archive/gh-trending/{today_str()}.json"
-        upload_to_s3(output, archive_key)
-        s3_successes += 1
-    except Exception:
-        logger.exception("Failed to upload archive copy to S3")
-        s3_failures += 1
+        logger.exception("Failed to write gh-trending data")
 
     trigger_rebuild()
 
-    # Emit custom metrics
     emit_metric("ReposProcessed", total_repos)
-    emit_metric("OpenAISummarizations", openai_calls)
-    emit_metric("S3UploadsSucceeded", s3_successes)
-    emit_metric("S3UploadsFailed", s3_failures)
+    emit_metric("LLMSummarizations", total_repos)
 
     logger.info(
         "GitHub Trending complete — %d weekly, %d monthly repos",
@@ -263,6 +228,9 @@ def handler(event: Any = None, context: Any = None) -> dict[str, Any]:
 
 
 if __name__ == "__main__":
+    import json as _json
+    import sys
+
     try:
         from dotenv import load_dotenv
 
@@ -271,5 +239,5 @@ if __name__ == "__main__":
         pass
 
     result = handler()
-    print(json.dumps(result, indent=2, ensure_ascii=False))
+    print(_json.dumps(result, indent=2, ensure_ascii=False))
     sys.exit(0)

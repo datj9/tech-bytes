@@ -1,6 +1,7 @@
 ---
 import Base from '../../../layouts/Base.astro';
-import { readFileSync, readdirSync } from 'node:fs';
+import { getDataDir, readDataJson } from '../../../lib/config';
+import { readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 interface Story {
@@ -13,12 +14,13 @@ interface Story {
 }
 
 interface HNData {
-  date: string;
+  date?: string;
+  generated_at?: string;
   stories: Story[];
 }
 
 export function getStaticPaths() {
-  const archiveDir = resolve(process.cwd(), '..', 'data', 'archive', 'hn-digest');
+  const archiveDir = resolve(getDataDir(), 'archive', 'hn-digest');
   let dates: string[] = [];
   try {
     dates = readdirSync(archiveDir)
@@ -41,14 +43,7 @@ export function getStaticPaths() {
 const { date } = Astro.params;
 const { prevDate, nextDate } = Astro.props;
 
-let data: HNData = { date: date ?? '', stories: [] };
-
-try {
-  const dataPath = resolve(process.cwd(), '..', 'data', 'archive', 'hn-digest', `${date}.json`);
-  data = JSON.parse(readFileSync(dataPath, 'utf-8'));
-} catch {
-  // data file not found
-}
+const data = readDataJson<HNData>(`archive/hn-digest/${date}.json`) ?? { stories: [] };
 
 function formatDate(dateStr: string): string {
   return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', {
@@ -79,7 +74,7 @@ function getDomain(url: string): string {
     <div class="mb-8">
       <h1 class="text-3xl font-bold text-slate-100 mb-2">HN Daily Digest</h1>
       <p class="text-slate-400 text-lg">Top Hacker News stories, summarized</p>
-      <p class="text-sm text-slate-500 mt-2">{formatDate(data.date || date || '')}</p>
+      <p class="text-sm text-slate-500 mt-2">{formatDate(data.date || data.generated_at || date || '')}</p>
     </div>
 
     <nav class="flex items-center justify-between mb-8">

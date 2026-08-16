@@ -1,85 +1,89 @@
-"""Email Digest — weekly summary of Tech Bytes content via AWS SES."""
+"""Email Digest — weekly summary of Tech Bytes content via AWS SES.
 
-import json
+This source is the most AWS-coupled: SES for sending, SSM for subscribers, and
+reads from storage. It's disabled by default in the starter config. Enable only
+on the AWS path (STORAGE=s3 + configured SES/SSM).
+
+Pipeline source. Run via `python -m pipeline.run email_digest`.
+"""
+
+from __future__ import annotations
+
 import logging
 import os
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
-import boto3
+from pipeline.providers import get_provider
+from pipeline.shared.config import load_config
+from pipeline.shared.utils import setup_logging, today_str
+from pipeline.storage import get_storage
 
-from shared.utils import get_openai_client, today_str, MODEL, _get_ssm_param
-
+setup_logging()
 logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
 
-SENDER = "digest@bytes.finaldivision.com"
-SUBSCRIBERS_SSM_PARAM = "/tech-bytes/subscribers"
-SITE_URL = "https://bytes.finaldivision.com"
+# All configurable values read from env so forkers can set their own.
+SENDER = os.environ.get("EMAIL_SENDER", "digest@example.com")
+SUBSCRIBERS_SSM_PARAM = os.environ.get("SUBSCRIBERS_SSM_PARAM", "/tech-bytes/subscribers")
+SITE_URL = os.environ.get("SITE_URL", "")
+SITE_TITLE = os.environ.get("SITE_TITLE", "Tech Bytes")
 
-S3_DATA_KEYS = [
-    "data/release-radar.json",
-    "data/hn-digest.json",
-    "data/gh-trending.json",
-]
+DATA_KEYS = {
+    "releases": "data/release-radar.json",
+    "stories": "data/hn-digest.json",
+    "repos": "data/gh-trending.json",
+}
 
 DIGEST_PROMPT = (
-    "You are a technical writer for a developer newsletter called Tech Bytes Weekly. "
-    "Given JSON data from three sources — release radar (software releases), "
-    "Hacker News digest (top stories), and GitHub trending (trending repos) — write "
-    "a 2-3 paragraph weekly summary that highlights the most interesting and impactful "
-    "items across all three sources. Be concise, engaging, and developer-focused. "
-    "Do not use markdown formatting. Write in plain text suitable for an email."
+    "You are a technical writer for a developer newsletter. Given JSON data from "
+    "three sources — release radar (software releases), Hacker News digest (top "
+    "stories), and GitHub trending (trending repos) — write a 2-3 paragraph weekly "
+    "summary that highlights the most interesting and impactful items across all "
+    "three sources. Be concise, engaging, and developer-focused. Do not use markdown "
+    "formatting. Write in plain text suitable for an email."
 )
 
 
 def _week_of_date() -> str:
-    """Return the Monday of the current week as a formatted date string."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     monday = now - timedelta(days=now.weekday())
     return monday.strftime("%B %d, %Y")
 
 
-def _read_s3_json(bucket: str, key: str) -> dict[str, Any]:
-    """Read and parse a JSON file from S3."""
-    s3 = boto3.client("s3")
-    try:
-        resp = s3.get_object(Bucket=bucket, Key=key)
-        return json.loads(resp["Body"].read().decode("utf-8"))
-    except Exception:
-        logger.exception("Failed to read s3://%s/%s", bucket, key)
-        return {}
-
-
 def _get_subscribers() -> list[str]:
-    """Read the subscriber list from SSM parameter (comma-separated emails)."""
+    """Read subscriber list from SSM (comma-separated). AWS path only."""
     try:
-        raw = _get_ssm_param(SUBSCRIBERS_SSM_PARAM)
+        import boto3
+
+        client = boto3.client("ssm")
+        resp = client.get_parameter(Name=SUBSCRIBERS_SSM_PARAM, WithDecryption=True)
+        raw = resp["Parameter"]["Value"]
         return [email.strip() for email in raw.split(",") if email.strip()]
     except Exception:
-        logger.exception("Failed to read subscribers from SSM")
+        logger.exception("Failed to read subscribers from SSM %s", SUBSCRIBERS_SSM_PARAM)
         return []
 
 
-def _extract_top_releases(data: dict[str, Any], count: int = 3) -> list[dict[str, str]]:
-    """Extract the top N most notable releases from release radar data."""
-    releases: list[dict[str, str]] = []
-    for tech in data.get("technologies", []):
-        tech_releases = tech.get("releases", [])
-        if tech_releases:
-            latest = tech_releases[0]
-            releases.append({
-                "technology": tech.get("technology", "Unknown"),
-                "version": latest.get("version", ""),
-                "summary": latest.get("summary", ""),
-                "url": latest.get("url", ""),
-            })
+def _extract_top_releases(data: dict[str, Any], count: int = 3) -> list[dict[str, Any]]:
+    """Extract top N releases across all categories."""
+    releases: list[dict[str, Any]] = []
+    for category in data.get("categories", []):
+        cat_releases = category.get("releases", [])
+        if cat_releases:
+            latest = cat_releases[0]
+            releases.append(
+                {
+                    "technology": category.get("name", "Unknown"),
+                    "version": latest.get("version", ""),
+                    "summary": latest.get("summary", ""),
+                    "url": latest.get("url", ""),
+                }
+            )
     return releases[:count]
 
 
 def _extract_top_stories(data: dict[str, Any], count: int = 5) -> list[dict[str, Any]]:
-    """Extract the top N HN stories by score."""
     stories = data.get("stories", [])
     sorted_stories = sorted(stories, key=lambda s: s.get("score", 0), reverse=True)
     return [
@@ -95,7 +99,6 @@ def _extract_top_stories(data: dict[str, Any], count: int = 5) -> list[dict[str,
 
 
 def _extract_top_repos(data: dict[str, Any], count: int = 3) -> list[dict[str, Any]]:
-    """Extract the top N trending repos from weekly data."""
     weekly_repos = data.get("weekly", [])
     sorted_repos = sorted(weekly_repos, key=lambda r: r.get("stars", 0), reverse=True)
     return [
@@ -111,43 +114,36 @@ def _extract_top_repos(data: dict[str, Any], count: int = 3) -> list[dict[str, A
 
 
 def _generate_ai_summary(
-    releases: list[dict[str, str]],
+    provider: Any,
+    releases: list[dict[str, Any]],
     stories: list[dict[str, Any]],
     repos: list[dict[str, Any]],
 ) -> str:
-    """Use OpenAI to generate a cohesive weekly summary."""
+    import json
+
     combined = json.dumps(
         {"releases": releases, "hn_stories": stories, "trending_repos": repos},
         indent=2,
     )
-    client = get_openai_client()
-    try:
-        response = client.chat.completions.create(
-            model=MODEL,
-            messages=[
-                {"role": "system", "content": DIGEST_PROMPT},
-                {"role": "user", "content": combined},
-            ],
-            max_tokens=600,
-            temperature=0.4,
-        )
-        return response.choices[0].message.content or ""
-    except Exception:
-        logger.exception("OpenAI digest summary failed")
-        return ""
+    return provider.summarize(combined, DIGEST_PROMPT, max_tokens=600)
 
 
 def _build_html(
+    site_title: str,
+    site_url: str,
     week_date: str,
     ai_summary: str,
-    releases: list[dict[str, str]],
+    releases: list[dict[str, Any]],
     stories: list[dict[str, Any]],
     repos: list[dict[str, Any]],
 ) -> str:
-    """Build the HTML email body with inline CSS."""
     releases_html = ""
     for r in releases:
-        url_tag = f'<a href="{r["url"]}" style="color: #2563eb; text-decoration: none;">{r["version"]}</a>' if r["url"] else r["version"]
+        url_tag = (
+            f'<a href="{r["url"]}" style="color: #2563eb; text-decoration: none;">{r["version"]}</a>'
+            if r.get("url")
+            else r.get("version", "")
+        )
         releases_html += f"""
         <tr>
           <td style="padding: 12px 16px; border-bottom: 1px solid #e5e7eb;">
@@ -184,14 +180,25 @@ def _build_html(
           </td>
         </tr>"""
 
-    ai_summary_html = ai_summary.replace("\n\n", "</p><p style=\"color: #374151; font-size: 15px; line-height: 1.6; margin: 0 0 16px;\">")
+    ai_summary_html = ai_summary.replace(
+        "\n\n",
+        '</p><p style="color: #374151; font-size: 15px; line-height: 1.6; margin: 0 0 16px;">',
+    )
+
+    footer_url_line = ""
+    if site_url:
+        footer_url_line = (
+            f'<p style="margin: 0 0 8px; color: #6b7280; font-size: 13px;">'
+            f'Read more at <a href="{site_url}" style="color: #2563eb; text-decoration: none;">{site_url}</a>'
+            f"</p>"
+        )
 
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tech Bytes Weekly - Week of {week_date}</title>
+  <title>{site_title} Weekly - Week of {week_date}</title>
 </head>
 <body style="margin: 0; padding: 0; background-color: #f3f4f6; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
   <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #f3f4f6;">
@@ -199,22 +206,19 @@ def _build_html(
       <td align="center" style="padding: 24px 16px;">
         <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="600" style="max-width: 600px; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
 
-          <!-- Header -->
           <tr>
             <td style="background: linear-gradient(135deg, #1e40af 0%, #7c3aed 100%); padding: 32px 24px; text-align: center;">
-              <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 700; letter-spacing: -0.5px;">Tech Bytes Weekly</h1>
+              <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 700; letter-spacing: -0.5px;">{site_title} Weekly</h1>
               <p style="margin: 8px 0 0; color: #c7d2fe; font-size: 15px;">Week of {week_date}</p>
             </td>
           </tr>
 
-          <!-- AI Summary -->
           <tr>
             <td style="padding: 24px;">
               <p style="color: #374151; font-size: 15px; line-height: 1.6; margin: 0 0 16px;">{ai_summary_html}</p>
             </td>
           </tr>
 
-          <!-- Notable Releases -->
           <tr>
             <td style="padding: 0 24px;">
               <h2 style="margin: 0 0 12px; color: #111827; font-size: 20px; font-weight: 700; border-bottom: 2px solid #2563eb; padding-bottom: 8px;">Notable Releases</h2>
@@ -224,10 +228,8 @@ def _build_html(
             </td>
           </tr>
 
-          <!-- Spacer -->
           <tr><td style="padding: 12px;"></td></tr>
 
-          <!-- Top HN Stories -->
           <tr>
             <td style="padding: 0 24px;">
               <h2 style="margin: 0 0 12px; color: #111827; font-size: 20px; font-weight: 700; border-bottom: 2px solid #f59e0b; padding-bottom: 8px;">Top Hacker News Stories</h2>
@@ -237,10 +239,8 @@ def _build_html(
             </td>
           </tr>
 
-          <!-- Spacer -->
           <tr><td style="padding: 12px;"></td></tr>
 
-          <!-- Trending Repos -->
           <tr>
             <td style="padding: 0 24px;">
               <h2 style="margin: 0 0 12px; color: #111827; font-size: 20px; font-weight: 700; border-bottom: 2px solid #10b981; padding-bottom: 8px;">Trending Repos</h2>
@@ -250,21 +250,11 @@ def _build_html(
             </td>
           </tr>
 
-          <!-- Footer -->
           <tr>
             <td style="padding: 32px 24px; background-color: #f9fafb; text-align: center; border-top: 1px solid #e5e7eb;">
-              <p style="margin: 0 0 8px; color: #6b7280; font-size: 13px;">
-                Read more at <a href="{SITE_URL}" style="color: #2563eb; text-decoration: none;">{SITE_URL}</a>
-              </p>
-              <p style="margin: 0 0 8px; color: #6b7280; font-size: 13px;">
-                <a href="{SITE_URL}/releases" style="color: #2563eb; text-decoration: none;">Releases</a> &middot;
-                <a href="{SITE_URL}/hn" style="color: #2563eb; text-decoration: none;">Hacker News</a> &middot;
-                <a href="{SITE_URL}/trending" style="color: #2563eb; text-decoration: none;">Trending</a>
-              </p>
+              {footer_url_line}
               <p style="margin: 16px 0 0; color: #9ca3af; font-size: 12px;">
-                You're receiving this because you subscribed to Tech Bytes Weekly.
-                <br>
-                <a href="{SITE_URL}/unsubscribe" style="color: #9ca3af; text-decoration: underline;">Unsubscribe</a>
+                You're receiving this because you subscribed to {site_title} Weekly.
               </p>
             </td>
           </tr>
@@ -278,7 +268,9 @@ def _build_html(
 
 
 def _send_email(recipients: list[str], subject: str, html_body: str) -> None:
-    """Send the digest email via SES."""
+    """Send via SES. AWS path only."""
+    import boto3
+
     ses = boto3.client("ses")
     for recipient in recipients:
         try:
@@ -287,9 +279,7 @@ def _send_email(recipients: list[str], subject: str, html_body: str) -> None:
                 Destination={"ToAddresses": [recipient]},
                 Message={
                     "Subject": {"Data": subject, "Charset": "UTF-8"},
-                    "Body": {
-                        "Html": {"Data": html_body, "Charset": "UTF-8"},
-                    },
+                    "Body": {"Html": {"Data": html_body, "Charset": "UTF-8"}},
                 },
             )
             logger.info("Sent digest to %s", recipient)
@@ -298,20 +288,16 @@ def _send_email(recipients: list[str], subject: str, html_body: str) -> None:
 
 
 def handler(event: Any = None, context: Any = None) -> dict[str, Any]:
-    """Lambda handler — build weekly digest and send via SES."""
+    """Build weekly digest and send via SES. Lambda-compatible."""
     logger.info("Email Digest starting")
 
-    bucket = os.environ.get("DATA_BUCKET_NAME")
-    if not bucket:
-        logger.error("DATA_BUCKET_NAME not set")
-        return {"status": "error", "message": "DATA_BUCKET_NAME not set"}
+    config = load_config()
+    storage = get_storage()
 
-    # Read latest data from S3
-    release_data = _read_s3_json(bucket, "data/release-radar.json")
-    hn_data = _read_s3_json(bucket, "data/hn-digest.json")
-    gh_data = _read_s3_json(bucket, "data/gh-trending.json")
+    release_data = storage.read_json(DATA_KEYS["releases"])
+    hn_data = storage.read_json(DATA_KEYS["stories"])
+    gh_data = storage.read_json(DATA_KEYS["repos"])
 
-    # Extract highlights
     top_releases = _extract_top_releases(release_data, count=3)
     top_stories = _extract_top_stories(hn_data, count=5)
     top_repos = _extract_top_repos(gh_data, count=3)
@@ -320,15 +306,15 @@ def handler(event: Any = None, context: Any = None) -> dict[str, Any]:
         logger.warning("No content available for digest — skipping")
         return {"status": "skipped", "message": "No content available"}
 
-    # Generate AI summary
-    ai_summary = _generate_ai_summary(top_releases, top_stories, top_repos)
+    provider = get_provider(config)
+    ai_summary = _generate_ai_summary(provider, top_releases, top_stories, top_repos)
 
-    # Build email
     week_date = _week_of_date()
-    subject = f"Tech Bytes Weekly — Week of {week_date}"
-    html_body = _build_html(week_date, ai_summary, top_releases, top_stories, top_repos)
+    subject = f"{SITE_TITLE} Weekly — Week of {week_date}"
+    html_body = _build_html(
+        SITE_TITLE, SITE_URL, week_date, ai_summary, top_releases, top_stories, top_repos
+    )
 
-    # Get subscribers and send
     subscribers = _get_subscribers()
     if not subscribers:
         logger.warning("No subscribers found — skipping send")
@@ -364,6 +350,8 @@ if __name__ == "__main__":
         load_dotenv()
     except ImportError:
         pass
+
+    import json
 
     result = handler()
     print(json.dumps(result, indent=2, ensure_ascii=False))

@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from gh_trending.handler import _parse_trending
+from pipeline.gh_trending.handler import _parse_trending
 
 FIXTURE = Path(__file__).parent / "fixtures" / "trending_sample.html"
 

@@ -1,0 +1,79 @@
+# Tech Bytes — full demo config.
+# This shows every source populated. Copy to config/techbytes.config.yml and trim/edit.
+# Icons live HERE now (not in the site) — pick any emoji per category.
+
+site:
+  title: "Tech Bytes"
+  tagline: "Daily developer digest"
+  url: ""           # blank = relative paths; set for custom domain
+  accent: emerald
+
+llm:
+  provider: openai  # openai | anthropic | local
+  model: ""         # blank = provider default
+  base_url: ""      # OpenAI-compatible base URL for the local provider
+
+sources:
+  release_radar:
+    enabled: true
+    categories:
+      - label: Runtimes
+        icon: "🚀"
+        items:
+          - { name: Node.js, repo: nodejs/node }
+          - { name: Deno, repo: denoland/deno }
+          - { name: Bun, repo: oven-sh/bun }
+          - { name: Python, repo: python/cpython }
+          - { name: Go, repo: golang/go }
+          - { name: Rust, repo: rust-lang/rust }
+
+      - label: Frontend
+        icon: "⚛️"
+        items:
+          - { name: React, repo: facebook/react }
+          - { name: Vue, repo: vuejs/core }
+          - { name: Angular, repo: angular/angular }
+          - { name: Svelte, repo: sveltejs/svelte }
+          - { name: Astro, repo: withastro/astro }
+
+      - label: Meta-Frameworks
+        icon: "📦"
+        items:
+          - { name: Next.js, repo: vercel/next.js }
+          - { name: Nuxt, repo: nuxt/nuxt }
+          - { name: SvelteKit, repo: sveltejs/kit }
+
+      - label: Languages
+        icon: "🔷"
+        items:
+          - { name: TypeScript, repo: microsoft/TypeScript }
+
+      - label: CSS
+        icon: "🎨"
+        items:
+          - { name: Tailwind CSS, repo: tailwindlabs/tailwindcss }
+
+      - label: Build Tools
+        icon: "🔧"
+        items:
+          - { name: Vite, repo: vitejs/vite }
+          - { name: esbuild, repo: evanw/esbuild }
+          - { name: Turbopack, repo: vercel/turborepo }
+
+      - label: Infrastructure
+        icon: "🏗️"
+        items:
+          - { name: Docker, repo: moby/moby }
+          - { name: Kubernetes, repo: kubernetes/kubernetes }
+          - { name: Terraform, repo: hashicorp/terraform }
+
+  hn_digest:
+    enabled: true
+    top_n: 15
+
+  gh_trending:
+    enabled: true
+    languages: [all]
+
+  email_digest:
+    enabled: false

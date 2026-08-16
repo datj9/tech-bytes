@@ -1,11 +1,11 @@
 import rss from '@astrojs/rss';
 import type { APIContext } from 'astro';
-import { resolve } from 'node:path';
+import { dataPath, getSiteConfig } from '../../lib/config';
 import { loadTrending, type Repo } from '../../lib/trending';
 
 export function GET(context: APIContext) {
-  const dataPath = resolve(process.cwd(), '..', 'data', 'gh-trending.json');
-  const data = loadTrending(dataPath);
+  const data = loadTrending(dataPath('gh-trending.json'));
+  const site = getSiteConfig();
 
   const pubDate = data.updated_at ? new Date(data.updated_at) : new Date();
 
@@ -27,10 +27,12 @@ export function GET(context: APIContext) {
     pubDate,
   }));
 
+  const siteUrl = context.site?.toString() || site.url || 'https://example.com';
+
   return rss({
-    title: 'Tech Bytes — GitHub Trending',
+    title: `${site.title} — GitHub Trending`,
     description: 'Trending GitHub repositories, summarized weekly',
-    site: context.site!.toString(),
+    site: siteUrl,
     items,
   });
 }

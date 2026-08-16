@@ -1,7 +1,6 @@
 ---
 import Base from '../layouts/Base.astro';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { readDataJson } from '../lib/config';
 
 interface Story {
   title: string;
@@ -14,19 +13,14 @@ interface Story {
 
 interface HNData {
   date: string;
+  generated_at?: string;
   stories: Story[];
 }
 
-let data: HNData = { date: '', stories: [] };
-
-try {
-  const dataPath = resolve(process.cwd(), '..', 'data', 'hn-digest.json');
-  data = JSON.parse(readFileSync(dataPath, 'utf-8'));
-} catch {
-  // data file not found — use empty defaults
-}
+const data = readDataJson<HNData>('hn-digest.json') ?? { date: '', stories: [] };
 
 function formatDate(dateStr: string): string {
+  if (!dateStr) return '';
   return new Date(dateStr).toLocaleDateString('en-US', {
     weekday: 'long',
     month: 'long',
@@ -42,6 +36,9 @@ function getDomain(url: string): string {
     return '';
   }
 }
+
+// Newer pipeline emits `generated_at`; older emits `date`.
+const displayedDate = data.date || data.generated_at || '';
 ---
 
 <Base title="HN Digest">
@@ -50,8 +47,8 @@ function getDomain(url: string): string {
       <h1 class="text-3xl font-bold text-slate-100 mb-2">📰 HN Daily Digest</h1>
       <p class="text-slate-400 text-lg">Top Hacker News stories, summarized</p>
       <div class="flex items-center gap-3 mt-2">
-        {data.date && (
-          <p class="text-sm text-slate-500">{formatDate(data.date)}</p>
+        {displayedDate && (
+          <p class="text-sm text-slate-500">{formatDate(displayedDate)}</p>
         )}
         <a
           href="/archive#hn-digest"

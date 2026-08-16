@@ -18,20 +18,37 @@ import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as budgets from 'aws-cdk-lib/aws-budgets';
 import { Construct } from 'constructs';
 
-const DOMAIN_NAME = 'bytes.finaldivision.com';
-const HOSTED_ZONE_NAME = 'finaldivision.com';
-
 const LAMBDA_NAMES = ['release_radar', 'hn_digest', 'gh_trending', 'email_digest'] as const;
+
+/** Resolve a required string from CDK context (fails fast with a clear message). */
+function requireContext(scope: Construct, key: string): string {
+  const value = scope.node.tryGetContext(key);
+  if (!value || typeof value !== 'string') {
+    throw new Error(
+      `Missing required CDK context: ${key}. Pass with: cdk deploy -c ${key}=value ` +
+      `(or set it in cdk.json context). See infra/README.md.`
+    );
+  }
+  return value;
+}
 
 export class TechBytesStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
     // ---------------------------------------------------------------
+    // 0. Resolved configuration (all from CDK context — no hardcoding)
+    // ---------------------------------------------------------------
+    const DOMAIN_NAME = requireContext(this, 'domain.name');
+    const HOSTED_ZONE_NAME = requireContext(this, 'hosted.zone.name');
+    const GITHUB_REPO = requireContext(this, 'github.repo'); // owner/name
+    const SSM_PREFIX = this.node.tryGetContext('ssm.prefix') || '/tech-bytes';
+
+    // ---------------------------------------------------------------
     // 1. SSM Parameter names (Lambdas read values at runtime)
     // ---------------------------------------------------------------
-    const OPENAI_KEY_PARAM = '/tech-bytes/openai-api-key';
-    const GITHUB_TOKEN_PARAM = '/tech-bytes/github-token';
+    const OPENAI_KEY_PARAM = `${SSM_PREFIX}/openai-api-key`;
+    const GITHUB_TOKEN_PARAM = `${SSM_PREFIX}/github-token`;
 
     // ---------------------------------------------------------------
     // 2. S3 Bucket — site files at root, data at data/ prefix
@@ -136,25 +153,28 @@ function handler(event) {
     // ---------------------------------------------------------------
     // 6c. SSM Parameter for email subscribers (comma-separated)
     // ---------------------------------------------------------------
-    const SUBSCRIBERS_PARAM = '/tech-bytes/subscribers';
+    const SUBSCRIBERS_PARAM = `${SSM_PREFIX}/subscribers`;
     new ssm.StringParameter(this, 'SubscribersParam', {
       parameterName: SUBSCRIBERS_PARAM,
       stringValue: 'placeholder@example.com',
-      description: 'Comma-separated list of Tech Bytes Weekly digest subscribers',
+      description: `Comma-separated list of digest subscribers (prefix ${SSM_PREFIX})`,
     });
 
     // ---------------------------------------------------------------
     // 7. Lambda Functions (Python 3.12)
     // ---------------------------------------------------------------
 
-    // Shared bundled asset — installs pip deps, copies source + config
-    const lambdaCode = lambda.Code.fromAsset('../lambdas', {
+    // Shared bundled asset — installs pip deps, copies source + config.
+    // Pipeline package at /asset-output/pipeline so handler ids like
+    // `pipeline.release_radar.handler.handler` resolve at runtime. Config at
+    // /asset-output/config so the config loader finds it from cwd (/var/task).
+    const lambdaCode = lambda.Code.fromAsset('../pipeline', {
       bundling: {
         image: lambda.Runtime.PYTHON_3_12.bundlingImage,
         command: [
           'bash',
           '-c',
-          'pip install -r requirements.txt -t /asset-output && cp -r . /asset-output && cp -r /asset-input-config /asset-output/config',
+          'pip install -r requirements.txt -t /asset-output && cp -r . /asset-output/pipeline && cp -r /asset-input-config /asset-output/config',
         ],
         volumes: [
           { hostPath: `${process.cwd()}/../config`, containerPath: '/asset-input-config' },
@@ -166,10 +186,11 @@ function handler(event) {
       const fn = new lambda.Function(this, `${pascalCase(name)}Function`, {
         runtime: lambda.Runtime.PYTHON_3_12,
         code: lambdaCode,
-        handler: `${name}.handler.handler`,
+        handler: `pipeline.${name}.handler.handler`,
         timeout: cdk.Duration.minutes(5),
         memorySize: 512,
         environment: {
+          STORAGE: 's3',
           DATA_BUCKET_NAME: siteBucket.bucketName,
           OPENAI_KEY_SSM_PARAM: OPENAI_KEY_PARAM,
           GITHUB_TOKEN_SSM_PARAM: GITHUB_TOKEN_PARAM,
@@ -285,11 +306,11 @@ function handler(event) {
             'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com',
           },
           StringLike: {
-            'token.actions.githubusercontent.com:sub': 'repo:datj9/tech-bytes:*',
+            [`token.actions.githubusercontent.com:sub`]: `repo:${GITHUB_REPO}:*`,
           },
         },
       ),
-      description: 'Role assumed by GitHub Actions for Tech Bytes CI/CD',
+      description: `Role assumed by GitHub Actions (${GITHUB_REPO}) for CI/CD`,
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName('AdministratorAccess'),
       ],

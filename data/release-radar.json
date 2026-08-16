@@ -3,7 +3,7 @@
   "categories": [
     {
       "name": "Node.js",
-      "icon": "nodejs",
+      "icon": "🚀",
       "category": "Runtimes",
       "releases": [
         {
@@ -22,7 +22,7 @@
     },
     {
       "name": "Deno",
-      "icon": "deno",
+      "icon": "🚀",
       "category": "Runtimes",
       "releases": [
         {
@@ -35,7 +35,7 @@
     },
     {
       "name": "React",
-      "icon": "react",
+      "icon": "⚛️",
       "category": "Frontend",
       "releases": [
         {
@@ -54,7 +54,7 @@
     },
     {
       "name": "Vue",
-      "icon": "vue",
+      "icon": "⚛️",
       "category": "Frontend",
       "releases": [
         {
@@ -67,7 +67,7 @@
     },
     {
       "name": "Go",
-      "icon": "go",
+      "icon": "🚀",
       "category": "Runtimes",
       "releases": [
         {
@@ -86,7 +86,7 @@
     },
     {
       "name": "Next.js",
-      "icon": "nextjs",
+      "icon": "📦",
       "category": "Meta-Frameworks",
       "releases": [
         {
@@ -99,7 +99,7 @@
     },
     {
       "name": "TypeScript",
-      "icon": "typescript",
+      "icon": "🔷",
       "category": "Languages",
       "releases": [
         {
@@ -112,7 +112,7 @@
     },
     {
       "name": "Tailwind CSS",
-      "icon": "tailwindcss",
+      "icon": "🎨",
       "category": "CSS",
       "releases": [
         {
@@ -125,7 +125,7 @@
     },
     {
       "name": "Vite",
-      "icon": "vite",
+      "icon": "🔧",
       "category": "Build Tools",
       "releases": [
         {
@@ -138,7 +138,7 @@
     },
     {
       "name": "Docker",
-      "icon": "docker",
+      "icon": "🏗️",
       "category": "Infrastructure",
       "releases": [
         {

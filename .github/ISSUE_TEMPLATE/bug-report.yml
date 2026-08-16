@@ -7,7 +7,7 @@ body:
     id: url
     attributes:
       label: Page URL
-      placeholder: "https://bytes.finaldivision.com/..."
+      placeholder: "https://your-site-url/..."
     validations:
       required: true
   - type: textarea

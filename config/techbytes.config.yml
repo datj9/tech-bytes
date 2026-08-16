@@ -1,0 +1,35 @@
+# Tech Bytes — minimal starter config.
+# Copy this file to config/techbytes.config.yml and edit.
+# The full demo (with more sources) is at techbytes.config.example.yml.
+
+site:
+  title: "Tech Bytes"
+  tagline: "Daily developer digest"
+  url: ""           # blank = relative paths; set for custom domain (e.g. https://bytes.example.com)
+  accent: emerald   # tailwind color token used by the site
+
+llm:
+  provider: openai  # openai | anthropic | local
+  model: ""         # blank = provider default (gpt-4o-mini / claude-sonnet-4-6 / your local model)
+  base_url: ""      # for local/OpenAI-compatible providers (Ollama, LM Studio, Groq, OpenRouter)
+
+sources:
+  release_radar:
+    enabled: true
+    categories:
+      - label: Runtimes
+        icon: "🚀"
+        items:
+          - { name: Node.js, repo: nodejs/node }
+          - { name: Python, repo: python/cpython }
+
+  hn_digest:
+    enabled: true
+    top_n: 15
+
+  gh_trending:
+    enabled: true
+    languages: [all]
+
+  email_digest:
+    enabled: false
